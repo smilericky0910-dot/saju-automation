@@ -17,9 +17,9 @@ import streamlit as st
 import math
 import datetime
 import json
+import os
 
-import report_pipeline
-import pdf_report
+import gdrive_uploader
 
 try:
     from korean_lunar_calendar import KoreanLunarCalendar
@@ -549,7 +549,7 @@ def determine_guckguk_by_wolji(day_master, month_branch):
 # ============================================================================
 
 class AdvancedSajuAnalyzer:
-    def __init__(self, name, sex, year_pillar, month_pillar, day_pillar, hour_pillar, daewoon_num, daewoon_pillars, birth_date=None, profile=None):
+    def __init__(self, name, sex, year_pillar, month_pillar, day_pillar, hour_pillar, daewoon_num, daewoon_pillars, birth_date=None, profile=None, compatibility=None):
         self.name = name
         self.sex = sex
         self.year = year_pillar
@@ -562,6 +562,7 @@ class AdvancedSajuAnalyzer:
         # 고객이 선택 입력한 혼인상태/자녀유무/직업상태/심층질문 (없으면 값이 None) —
         # 풀이 엔진이 서술 깊이·심층 질문 답변 여부를 판단하는 데만 쓰고, 계산에는 관여하지 않는다.
         self.profile = profile or {}
+        self.compatibility = compatibility or {'requested': False}
         
         self.day_master = day_pillar[0]
         
@@ -901,6 +902,7 @@ class AdvancedSajuAnalyzer:
                 'job_status': self.profile.get('job_status'),
                 'deep_question': self.profile.get('deep_question'),
             },
+            'compatibility': self.compatibility,
             'pillars_raw': {
                 'year': list(self.year), 'month': list(self.month), 'day': list(self.day),
                 'hour': list(self.hour) if self.hour else None,
@@ -1194,214 +1196,198 @@ def _pillar_card_html(label, stem, stem_deity, branch, branch_deity, jijanggan, 
 
 
 def render_input_screen():
-    st.header("📋 분석 대상자 정보 입력")
+    st.markdown("### 🔮 답답명쾌 사주해답소 - 분석 정보 입력")
+    
+    # 1. 콤팩트한 이름/성별 라인
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        st.markdown("**이름**")
+        name = st.text_input("이름", value="", max_chars=12, placeholder="이름 입력", label_visibility="collapsed")
+    with col2:
+        st.markdown("**성별**")
+        sex = st.radio("성별 선택", ["여자", "남자"], horizontal=True, label_visibility="collapsed")
+        sex_internal = "남성" if sex == "남자" else "여성"
 
-    name = st.text_input("이름", value="", max_chars=12, placeholder="최대 12글자 이내로 입력하세요")
-    sex = st.radio("성별", ["여자", "남자"], horizontal=True)
-    sex_internal = "남성" if sex == "남자" else "여성"
+    # 2. 생년월일시
+    st.markdown("**생년월일시**")
+    col1, col2, col3, col4, col5 = st.columns([1.5, 1.2, 1, 1, 1.8])
+    with col1:
+        calendar_type = st.selectbox("양력/음력", ["양력", "음력", "음력(윤달)"], label_visibility="collapsed")
+    with col2:
+        current_year = datetime.datetime.now().year
+        year_options = [f"{y}년" for y in range(current_year, current_year - 101, -1)]
+        selected_year = st.selectbox("년", year_options, index=year_options.index("1990년"), label_visibility="collapsed")
+    with col3:
+        month_options = [f"{m}월" for m in range(1, 13)]
+        selected_month = st.selectbox("월", month_options, index=0, label_visibility="collapsed")
+    with col4:
+        day_options = [f"{d}일" for d in range(1, 32)]
+        selected_day = st.selectbox("일", day_options, index=0, label_visibility="collapsed")
+    with col5:
+        birth_time = st.time_input("태어난 시간", value=datetime.time(12, 0), label_visibility="collapsed")
+    
+    y_val = int(selected_year.replace("년", ""))
+    m_val = int(selected_month.replace("월", ""))
+    d_val = int(selected_day.replace("일", ""))
+    try:
+        birth_date = datetime.date(y_val, m_val, d_val)
+    except ValueError:
+        birth_date = datetime.date(1990, 1, 1)
+        
+    is_lunar = calendar_type in ["음력", "음력(윤달)"]
+    is_leap = calendar_type == "음력(윤달)"
+    
+    col4, col5 = st.columns([1, 1.5])
+    with col4:
+        time_unknown = st.checkbox("시간 모름")
+    with col5:
+        use_jasi_option = st.checkbox("야자시/조자시 적용")
+        
+    time_boundary = "표준 자시(기본)"
+    if use_jasi_option:
+        time_boundary = "야자시 적용 (23:30~24:00)"
 
-    calendar_type = st.radio("양력 / 음력", ["양력", "음력"], horizontal=True)
-    is_lunar = (calendar_type == "음력")
-    is_leap = False
-    if is_lunar:
-        is_leap = st.checkbox("윤달 여부")
-
-    time_unknown = st.checkbox("⏰ 시간 모름")
-
-    birth_date = st.date_input(
-        "생년월일",
-        value=datetime.date(1990, 1, 1),
-        min_value=datetime.date(1920, 1, 1),
-        max_value=datetime.date(2030, 12, 31),
-    )
-
-    birth_time = None
-    if not time_unknown:
-        birth_time = st.time_input("생시", value=datetime.time(12, 0))
-    else:
-        st.caption("⏰ 시간을 모르면 시주(時柱) 없이 년주·월주·일주 세 기둥만으로 분석됩니다. 시지 기반 신살·12운성 일부도 판정에서 제외됩니다.")
-
-    time_boundary = "선택 안 함(기본)"
-    if not time_unknown:
-        use_jasi_option = st.checkbox("야자시/조자시 세부 설정 사용", value=False, help="자시(23~01시) 처리 방식에 대한 고급 옵션입니다. 잘 모르시면 꺼두시면 기본값(선택 안 함)으로 계산됩니다.")
-        if use_jasi_option:
-            time_boundary = st.selectbox(
-                "야자시 / 조자시 기준",
-                ["선택 안 함(기본)", "야자시 적용 (23:30~24:00)", "조자시 적용 (00:00~00:30)"],
-            )
-
-    st.markdown("**도시**")
-    city_options = list(CITY_LONGITUDE_OFFSETS.keys()) + ["직접 입력(수동 분 단위)"]
-    city = st.selectbox("도시명을 입력하거나 목록에서 선택하세요", city_options, index=city_options.index("서울특별시"), label_visibility="collapsed")
-    if city == "직접 입력(수동 분 단위)":
-        region_offset_mins = st.slider("수동 경도 시차 (분)", -45, 0, -30)
+    st.markdown("**출생 도시**")
+    city_options = list(CITY_LONGITUDE_OFFSETS.keys()) + ["직접입력(해외 등)"]
+    city = st.selectbox("도시명", city_options, index=city_options.index("서울특별시"), label_visibility="collapsed")
+    if city == "직접입력(해외 등)":
+        region_offset_mins = st.slider("경도 보정(분)", -45, 0, -30)
     else:
         region_offset_mins = CITY_LONGITUDE_OFFSETS[city]
+        
+    st.markdown("**고객 고민 / 추가 전달 사항**")
+    deep_question = st.text_area("고객 고민", placeholder="현재 고민이나 궁금한 점을 적어주시면 AI 분석 시 반영됩니다.", height=100, label_visibility="collapsed")
 
-    dst_auto = st.checkbox("역사적 서머타임/과거 표준시 자동 보정", value=True, help="서머타임 실시 기간(1948~1988년 일부)과 한국 표준시가 UTC+8:30이던 시기(1954~1961년)를 자동으로 인식해 보정합니다.")
+    # 궁합 분석 (선택)
+    st.markdown("**💕 궁합 분석 (선택)**")
+    want_compat = st.checkbox("궁합 분석을 함께 신청할게요")
+    compat_type = partner_name = partner_sex = partner_city = None
+    partner_birth_known = False
+    partner_is_lunar = partner_is_leap = False
+    partner_date = None
+    partner_time_unknown = True
+    partner_time = None
+    if want_compat:
+        compat_type = st.radio("궁합 유형", ["연인·배우자 궁합", "재회 궁합", "반려동물 궁합", "기타"], horizontal=True, key="compat_type")
+        if compat_type == "기타":
+            compat_type_custom = st.text_input("궁합 유형을 직접 입력해주세요", placeholder="예: 동성 커플, 친구, 사업 파트너, 반려물건 등", key="compat_type_custom")
+            if compat_type_custom.strip():
+                compat_type = f"기타 ({compat_type_custom.strip()})"
+        partner_label = "반려동물" if compat_type == "반려동물 궁합" else "상대방"
+        st.caption(f"{partner_label} 정보는 아는 만큼만 입력하시면 됩니다. 생년월일을 모르면 비워두셔도 참고용으로 분석됩니다.")
+
+        pcol1, pcol2 = st.columns([1, 1])
+        with pcol1:
+            partner_name = st.text_input(f"{partner_label} 이름", key="partner_name")
+        with pcol2:
+            partner_sex = st.radio(f"{partner_label} 성별", ["여자", "남자", "모름"], horizontal=True, key="partner_sex")
+
+        partner_birth_known = st.checkbox("생년월일을 알아요", key="partner_birth_known")
+        if partner_birth_known:
+            qcol1, qcol2, qcol3, qcol4, qcol5 = st.columns([1.5, 1.2, 1, 1, 1.8])
+            with qcol1:
+                p_calendar_type = st.selectbox("양력/음력", ["양력", "음력", "음력(윤달)"], key="partner_calendar_type", label_visibility="collapsed")
+            with qcol2:
+                p_selected_year = st.selectbox("년", year_options, index=year_options.index("1990년"), key="partner_year", label_visibility="collapsed")
+            with qcol3:
+                p_selected_month = st.selectbox("월", month_options, index=0, key="partner_month", label_visibility="collapsed")
+            with qcol4:
+                p_selected_day = st.selectbox("일", day_options, index=0, key="partner_day", label_visibility="collapsed")
+            with qcol5:
+                partner_time_unknown = st.checkbox("시간 모름", value=True, key="partner_time_unknown")
+
+            partner_is_lunar = p_calendar_type in ["음력", "음력(윤달)"]
+            partner_is_leap = p_calendar_type == "음력(윤달)"
+            p_y = int(p_selected_year.replace("년", ""))
+            p_m = int(p_selected_month.replace("월", ""))
+            p_d = int(p_selected_day.replace("일", ""))
+            try:
+                partner_date = datetime.date(p_y, p_m, p_d)
+            except ValueError:
+                partner_date = datetime.date(1990, 1, 1)
+
+            if not partner_time_unknown:
+                partner_time = st.time_input(f"{partner_label} 태어난 시간", value=datetime.time(12, 0), key="partner_time")
+
+            partner_city_options = ["선택 안 함"] + list(CITY_LONGITUDE_OFFSETS.keys())
+            partner_city = st.selectbox(f"{partner_label} 태어난 도시", partner_city_options, key="partner_city")
+            if partner_city == "선택 안 함":
+                partner_city = None
 
     st.write("")
-    with st.expander("📝 선택 입력 — 더 정확한 심층 풀이를 원하시면 입력해주세요"):
-        st.caption("혼인·자녀·직업 상태에 따라 풀이 내용의 깊이와 방향이 달라집니다. 모르거나 밝히고 싶지 않으면 비워두셔도 됩니다.")
-        marital_status = st.radio("혼인상태", ["선택 안 함", "미혼", "기혼", "이혼·사별"])
-        has_children = st.radio("자녀유무", ["선택 안 함", "없음", "있음"])
-        job_status = st.radio("직업상태", ["선택 안 함", "재학중(학생)", "재직중(직장인)", "사업·자영업", "구직·전환기"])
-        deep_question = st.text_area("심층 질문 (선택)", placeholder="예: 이직 시기가 궁금해요 / 결혼은 언제쯤일까요 / 자녀 학업운이 궁금해요", height=80)
 
-    with st.expander("📞 연락처 및 리포트 전달 방식 (선택)"):
-        st.caption("완성된 리포트를 전달받을 방법입니다. 지금은 정보만 저장되고, 실제 자동 발송은 추후 연동될 예정입니다.")
-        phone = st.text_input("전화번호", placeholder="010-0000-0000")
-        email = st.text_input("이메일", placeholder="example@email.com")
-        delivery_method = st.radio("리포트 전달 방식", ["선택 안 함", "이메일로 받기", "문자(SMS)로 받기", "카카오톡으로 받기"])
-
-    with st.expander("💕 궁합 분석 추가 (선택)"):
-        want_compat = st.checkbox("궁합 분석을 함께 신청할게요")
-        partner_type = partner_name = partner_sex = None
-        partner_birth_known = False
-        partner_is_lunar = partner_is_leap = False
-        partner_date = None
-        partner_time_unknown = True
-        partner_time = None
-        partner_city = None
-        if want_compat:
-            compat_type = st.radio("궁합 유형", ["연인·배우자 궁합", "재회 궁합", "반려동물 궁합"])
-            partner_type = compat_type
-            partner_label = "반려동물" if compat_type == "반려동물 궁합" else "상대방"
-            st.caption(f"{partner_label} 정보를 아는 만큼만 입력해주세요. 다 몰라도 괜찮습니다 — 아는 정보만 참고해서 함께 분석합니다.")
-            partner_name = st.text_input(f"{partner_label} 이름", key="partner_name")
-            partner_sex = st.radio(f"{partner_label} 성별", ["모름", "여자", "남자"], key="partner_sex")
-            partner_birth_known = st.checkbox("생년월일을 알아요", key="partner_birth_known")
-            if partner_birth_known:
-                partner_calendar = st.radio("양력 / 음력", ["양력", "음력"], key="partner_calendar")
-                partner_is_lunar = (partner_calendar == "음력")
-                if partner_is_lunar:
-                    partner_is_leap = st.checkbox("윤달 여부", key="partner_is_leap")
-                partner_date = st.date_input(
-                    f"{partner_label} 생년월일", value=datetime.date(1990, 1, 1),
-                    min_value=datetime.date(1920, 1, 1), max_value=datetime.date(2030, 12, 31),
-                    key="partner_date",
-                )
-                partner_time_unknown = st.checkbox("시간 모름", value=True, key="partner_time_unknown")
-                if not partner_time_unknown:
-                    partner_time = st.time_input(f"{partner_label} 생시", value=datetime.time(12, 0), key="partner_time")
-                partner_city_options = ["선택 안 함"] + list(CITY_LONGITUDE_OFFSETS.keys())
-                partner_city = st.selectbox(f"{partner_label} 태어난 도시", partner_city_options, key="partner_city")
-                if partner_city == "선택 안 함":
-                    partner_city = None
-
-    if st.button("만세력 보러가기", type="primary", use_container_width=True):
+    # 1단계 버튼: 입력 완료 (토글 역할)
+    if st.button("고객정보 입력완료", type="secondary", use_container_width=True):
         if not name.strip():
             st.error("이름을 입력해주세요.")
             return
-        if delivery_method == "이메일로 받기" and not email.strip():
-            st.error("이메일로 받기를 선택하셨다면 이메일을 입력해주세요.")
-            return
-        if delivery_method in ("문자(SMS)로 받기", "카카오톡으로 받기") and not phone.strip():
-            st.error("문자/카카오톡으로 받기를 선택하셨다면 전화번호를 입력해주세요.")
-            return
-        st.session_state.input_data = {
-            'name': name.strip(), 'sex': sex_internal, 'is_lunar': is_lunar, 'is_leap': is_leap,
-            'time_unknown': time_unknown, 'birth_date': birth_date, 'birth_time': birth_time,
-            'city': city, 'region_offset_mins': region_offset_mins,
-            'dst_auto': dst_auto, 'time_boundary': time_boundary,
-            'profile': {
-                'marital_status': marital_status if marital_status != "선택 안 함" else None,
-                'has_children': has_children if has_children != "선택 안 함" else None,
-                'job_status': job_status if job_status != "선택 안 함" else None,
-                'deep_question': deep_question.strip() or None,
-            },
-            'contact': {
-                'phone': phone.strip() or None,
-                'email': email.strip() or None,
-                'delivery_method': delivery_method if delivery_method != "선택 안 함" else None,
-            },
-            'compatibility': {
-                'requested': want_compat,
-                'type': partner_type,
-                'partner_name': (partner_name.strip() or None) if partner_name else None,
-                'partner_sex': partner_sex if partner_sex and partner_sex != "모름" else None,
-                'partner_birth_known': partner_birth_known,
-                'partner_is_lunar': partner_is_lunar,
-                'partner_is_leap': partner_is_leap,
-                'partner_date': partner_date,
-                'partner_time_unknown': partner_time_unknown,
-                'partner_time': partner_time,
-                'partner_city': partner_city,
-            } if want_compat else {'requested': False},
-        }
-        st.session_state.step = 'confirm'
-        st.rerun()
+        st.session_state.show_confirm = True
+        
+    # 하단에 표시되는 결과 표 및 최종 버튼
+    if st.session_state.get('show_confirm', False):
+        st.markdown("---")
+        st.markdown("<h3 style='text-align:center;'>✅ 입력 정보 최종 확인</h3>", unsafe_allow_html=True)
+        st.caption("<p style='text-align:center;'>수정이 필요하면 위에서 값을 변경하고 다시 버튼을 눌러주세요.</p>", unsafe_allow_html=True)
+        
+        cal_str = ("음력(윤달)" if is_leap else "음력") if is_lunar else "양력"
+        time_str = "모름" if time_unknown else birth_time.strftime('%H:%M')
+        
+        # HTML Table for centralized and beautiful display
+        table_html = f"""
+        <table style="width: 100%; max-width: 600px; margin: 0 auto; border-collapse: collapse; text-align: left; background-color: white; border: 1px solid #e0e0e0; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+            <tr style="border-bottom: 1px solid #e0e0e0;"><th style="padding: 12px; width: 30%; background-color: #f7f9fa; border-right: 1px solid #e0e0e0;">이름</th><td style="padding: 12px;">{name}</td></tr>
+            <tr style="border-bottom: 1px solid #e0e0e0;"><th style="padding: 12px; background-color: #f7f9fa; border-right: 1px solid #e0e0e0;">성별</th><td style="padding: 12px;">{sex}</td></tr>
+            <tr style="border-bottom: 1px solid #e0e0e0;"><th style="padding: 12px; background-color: #f7f9fa; border-right: 1px solid #e0e0e0;">생년월일</th><td style="padding: 12px;">{birth_date.strftime('%Y년 %m월 %d일')} ({cal_str})</td></tr>
+            <tr style="border-bottom: 1px solid #e0e0e0;"><th style="padding: 12px; background-color: #f7f9fa; border-right: 1px solid #e0e0e0;">태어난 시간</th><td style="padding: 12px;">{time_str} ({time_boundary})</td></tr>
+            <tr style="border-bottom: 1px solid #e0e0e0;"><th style="padding: 12px; background-color: #f7f9fa; border-right: 1px solid #e0e0e0;">출생 도시</th><td style="padding: 12px;">{city} (보정: {region_offset_mins}분)</td></tr>
+            <tr><th style="padding: 12px; background-color: #f7f9fa; border-right: 1px solid #e0e0e0;">고객 고민</th><td style="padding: 12px;">{deep_question if deep_question.strip() else '없음'}</td></tr>
+        </table>
+        <br/>
+        """
+        st.markdown(table_html, unsafe_allow_html=True)
 
-
-def render_confirm_screen():
-    st.header("✅ 입력 정보 확인")
-    data = st.session_state.input_data
-
-    cal_str = ("음력(윤달)" if data['is_leap'] else "음력") if data['is_lunar'] else "양력"
-    time_str = data['birth_time'].strftime('%H:%M') if data['birth_time'] else "시간모름"
-
-    st.markdown(f"""
-| 항목 | 값 |
-|---|---|
-| 이름 | {data['name']} |
-| 성별 | {data['sex']} |
-| 생년월일 | {data['birth_date'].strftime('%Y-%m-%d')} ({cal_str}) |
-| 생시 | {time_str} |
-| 태어난 도시 | {data['city']} (경도 보정 {data['region_offset_mins']}분) |
-| 서머타임/과거 표준시 자동보정 | {'적용' if data['dst_auto'] else '미적용'} |
-""")
-
-    profile = data.get('profile') or {}
-    profile_rows = [
-        ('혼인상태', profile.get('marital_status')),
-        ('자녀유무', profile.get('has_children')),
-        ('직업상태', profile.get('job_status')),
-        ('심층 질문', profile.get('deep_question')),
-    ]
-    profile_rows = [(k, v) for k, v in profile_rows if v]
-    if profile_rows:
-        st.markdown("**선택 입력 정보**")
-        st.markdown("\n".join(f"- {k}: {v}" for k, v in profile_rows))
-
-    contact = data.get('contact') or {}
-    contact_rows = [
-        ('전화번호', contact.get('phone')),
-        ('이메일', contact.get('email')),
-        ('리포트 전달 방식', contact.get('delivery_method')),
-    ]
-    contact_rows = [(k, v) for k, v in contact_rows if v]
-    if contact_rows:
-        st.markdown("**연락처 / 리포트 전달**")
-        st.markdown("\n".join(f"- {k}: {v}" for k, v in contact_rows))
-
-    compat = data.get('compatibility') or {}
-    if compat.get('requested'):
-        st.markdown("**궁합 분석 신청 정보**")
-        compat_lines = [f"- 유형: {compat.get('type')}"]
-        if compat.get('partner_name'):
-            compat_lines.append(f"- 상대방 이름: {compat['partner_name']}")
-        if compat.get('partner_sex'):
-            compat_lines.append(f"- 상대방 성별: {compat['partner_sex']}")
-        if compat.get('partner_birth_known') and compat.get('partner_date'):
-            p_cal = ("음력(윤달)" if compat.get('partner_is_leap') else "음력") if compat.get('partner_is_lunar') else "양력"
-            p_time = "시간모름" if compat.get('partner_time_unknown') else compat['partner_time'].strftime('%H:%M')
-            compat_lines.append(f"- 상대방 생년월일: {compat['partner_date'].strftime('%Y-%m-%d')} ({p_cal}) / {p_time}")
-            if compat.get('partner_city'):
-                compat_lines.append(f"- 상대방 태어난 도시: {compat['partner_city']}")
-        else:
-            compat_lines.append("- 상대방 생년월일: 모름 (참고용 정보만으로 분석)")
-        st.markdown("\n".join(compat_lines))
-
-    if data['time_unknown']:
-        st.info("⏰ 시간을 모르셔서 시주(時柱) 없이 년주·월주·일주 세 기둥으로만 분석됩니다. 대운 방향과 신강신약 비율은 정상적으로 계산되지만, 시지 기반 신살·12운성 일부는 판정에서 제외됩니다.")
-
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("← 다시 입력", use_container_width=True):
-            st.session_state.step = 'input'
-            st.rerun()
-    with col2:
-        if st.button("이 정보로 분석하기", type="primary", use_container_width=True):
+        if want_compat:
+            partner_label = "반려동물" if compat_type == "반려동물 궁합" else "상대방"
+            if partner_birth_known and partner_date:
+                p_cal_str = ("음력(윤달)" if partner_is_leap else "음력") if partner_is_lunar else "양력"
+                p_time_str = "모름" if partner_time_unknown else partner_time.strftime('%H:%M')
+                birth_row = f"{partner_date.strftime('%Y년 %m월 %d일')} ({p_cal_str}) / {p_time_str}"
+            else:
+                birth_row = "모름 (참고용 정보만으로 분석)"
+            compat_table_html = f"""
+            <table style="width: 100%; max-width: 600px; margin: 0 auto; border-collapse: collapse; text-align: left; background-color: white; border: 1px solid #e0e0e0; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                <tr style="border-bottom: 1px solid #e0e0e0;"><th style="padding: 12px; width: 30%; background-color: #f7f9fa; border-right: 1px solid #e0e0e0;">궁합 유형</th><td style="padding: 12px;">{compat_type}</td></tr>
+                <tr style="border-bottom: 1px solid #e0e0e0;"><th style="padding: 12px; background-color: #f7f9fa; border-right: 1px solid #e0e0e0;">{partner_label} 이름</th><td style="padding: 12px;">{partner_name.strip() if partner_name and partner_name.strip() else '없음'}</td></tr>
+                <tr style="border-bottom: 1px solid #e0e0e0;"><th style="padding: 12px; background-color: #f7f9fa; border-right: 1px solid #e0e0e0;">{partner_label} 성별</th><td style="padding: 12px;">{partner_sex}</td></tr>
+                <tr><th style="padding: 12px; background-color: #f7f9fa; border-right: 1px solid #e0e0e0;">{partner_label} 생년월일</th><td style="padding: 12px;">{birth_row}</td></tr>
+            </table>
+            <br/>
+            """
+            st.markdown("<h4 style='text-align:center;'>💕 궁합 분석 정보</h4>", unsafe_allow_html=True)
+            st.markdown(compat_table_html, unsafe_allow_html=True)
+        
+        # 2단계 버튼: 구글 드라이브 연동 및 최종 전송
+        if st.button("🚀 고객정보입력 완료", type="primary", use_container_width=True):
+            data = {
+                'name': name.strip(), 'sex': sex_internal, 'is_lunar': is_lunar, 'is_leap': is_leap,
+                'time_unknown': time_unknown, 'birth_date': birth_date, 'birth_time': birth_time if not time_unknown else None,
+                'city': city, 'region_offset_mins': region_offset_mins,
+                'dst_auto': True, 'time_boundary': time_boundary,
+                'profile': {
+                    'marital_status': None,
+                    'has_children': None,
+                    'job_status': None,
+                    'deep_question': deep_question.strip() if deep_question.strip() else None,
+                },
+                'contact': {
+                    'phone': None,
+                    'email': None,
+                    'delivery_method': "카카오톡 남기기",
+                },
+                'compatibility': {'requested': False},
+            }
+            st.session_state.input_data = data
+            
             b_hour = data['birth_time'].hour if data['birth_time'] else None
             b_minute = data['birth_time'].minute if data['birth_time'] else 0
 
@@ -1425,30 +1411,35 @@ def render_confirm_screen():
                 saju_data = analyzer.compute_all()
                 saju_data['contact'] = data.get('contact') or {}
 
-                compat = data.get('compatibility') or {}
-                compat_out = {'requested': compat.get('requested', False), 'type': compat.get('type'),
-                               'partner_name': compat.get('partner_name'), 'partner_sex': compat.get('partner_sex'),
-                               'partner_city': compat.get('partner_city'), 'partner_saju': None}
-                if compat.get('requested') and compat.get('partner_birth_known') and compat.get('partner_date') and compat.get('partner_sex'):
-                    p_date = compat['partner_date']
-                    p_hour = compat['partner_time'].hour if (not compat.get('partner_time_unknown') and compat.get('partner_time')) else None
-                    p_minute = compat['partner_time'].minute if (not compat.get('partner_time_unknown') and compat.get('partner_time')) else 0
-                    p_sex_internal = "남성" if compat['partner_sex'] == "남자" else "여성"
-                    p_region_offset = CITY_LONGITUDE_OFFSETS.get(compat.get('partner_city'), 0)
-                    try:
-                        py, pm, pd_, ph, p_daewoon_num, p_daewoon_pillars, _, p_lst_dt = convert_to_pillars(
-                            p_date.year, p_date.month, p_date.day, p_hour, p_minute,
-                            compat.get('partner_is_lunar', False), compat.get('partner_is_leap', False),
-                            p_sex_internal, "선택 안 함(기본)", p_region_offset, 0
-                        )
-                        partner_analyzer = AdvancedSajuAnalyzer(
-                            compat.get('partner_name') or "상대방",
-                            p_sex_internal, py, pm, pd_, ph, p_daewoon_num, p_daewoon_pillars,
-                            birth_date=p_lst_dt.date()
-                        )
-                        compat_out['partner_saju'] = partner_analyzer.compute_all()
-                    except Exception:
-                        compat_out['partner_saju'] = None
+                compat_out = {'requested': False}
+                if want_compat:
+                    compat_out = {
+                        'requested': True,
+                        'type': compat_type,
+                        'partner_name': (partner_name.strip() or None) if partner_name else None,
+                        'partner_sex': partner_sex if partner_sex != "모름" else None,
+                        'partner_city': partner_city,
+                        'partner_saju': None,
+                    }
+                    if partner_birth_known and partner_date and partner_sex in ("여자", "남자"):
+                        try:
+                            p_hour = partner_time.hour if (not partner_time_unknown and partner_time) else None
+                            p_minute = partner_time.minute if (not partner_time_unknown and partner_time) else 0
+                            p_sex_internal = "남성" if partner_sex == "남자" else "여성"
+                            p_region_offset = CITY_LONGITUDE_OFFSETS.get(partner_city, 0) if partner_city else 0
+                            py, pm, pd_, ph, p_daewoon_num, p_daewoon_pillars, _, p_lst_dt = convert_to_pillars(
+                                partner_date.year, partner_date.month, partner_date.day, p_hour, p_minute,
+                                partner_is_lunar, partner_is_leap, p_sex_internal,
+                                "표준 자시(기본)", p_region_offset, 0,
+                            )
+                            partner_analyzer = AdvancedSajuAnalyzer(
+                                (partner_name.strip() if partner_name and partner_name.strip() else "상대방"),
+                                p_sex_internal, py, pm, pd_, ph, p_daewoon_num, p_daewoon_pillars,
+                                birth_date=p_lst_dt.date(),
+                            )
+                            compat_out['partner_saju'] = partner_analyzer.compute_all()
+                        except Exception:
+                            compat_out['partner_saju'] = None
                 saju_data['compatibility'] = compat_out
 
                 st.session_state.saju_data = saju_data
@@ -1458,174 +1449,48 @@ def render_confirm_screen():
             except Exception as e:
                 st.error(f"입력하신 정보로 사주를 계산할 수 없습니다: {e}")
 
-
 def _json_safe(obj):
-    """compute_all() dict를 json.dumps 가능한 형태로 변환 (frozenset/set/tuple → list)."""
+    """compute_all() dict를 json.dumps 가능한 형태로 변환(frozenset/set/tuple 은 list)."""
     if isinstance(obj, dict):
         return {str(k): _json_safe(v) for k, v in obj.items()}
     if isinstance(obj, (list, tuple, set, frozenset)):
         return [_json_safe(v) for v in obj]
     return obj
 
+def render_gdrive_upload_section(saju_data, customer_name, birth_date):
+    st.subheader("📤 구글 드라이브로 전송")
+    st.caption("사주분석엔진이 계산한 결과값 전체(위 JSON과 동일 — 원국/오행/십성/신강신약/용신/대운/세운/신살/배우자운·재운·직업운 등 누락 없이 전부)를 텍스트 파일(.txt, 내용은 JSON 그대로)로 구글 드라이브의 날짜별 폴더에 저장합니다. 노트북LM 등에 소스로 바로 추가할 수 있는 형태입니다. 궁합 분석을 함께 신청해 상대방 사주도 계산된 경우, 두 사람 분석은 합치지 않고 완전히 별도의 파일 두 개로 나눠서 저장합니다.")
 
-def render_report_generation_section(saju_data, customer_name):
-    """2단계: 지침 문서 + saju_data(JSON)를 Claude API에 넘겨 실제 사주풀이 리포트를 생성하는 섹션."""
-    st.subheader("🖋️ AI 인생 전략 리포트 생성")
-    st.caption("위 사주 데이터와 풀이 지침을 근거로 Claude가 실제 리포트를 작성합니다. 분량이 길어 완성까지 1~2분 정도 걸릴 수 있고, 1회 생성마다 API 비용이 발생합니다.")
+    try:
+        root_folder_id = st.secrets.get("GDRIVE_ROOT_FOLDER_ID")
+    except Exception:
+        root_folder_id = None
+    root_folder_id = root_folder_id or os.environ.get("GDRIVE_ROOT_FOLDER_ID")
 
-    api_key = report_pipeline.resolve_api_key(st.session_state.get('anthropic_api_key'))
-    if not api_key:
-        st.info("리포트를 생성하려면 Anthropic API 키가 필요합니다. 아래에 입력하면 이번 세션에서만 사용되고 저장되지 않습니다. (매번 새로 입력하지 않으려면 환경변수 `ANTHROPIC_API_KEY` 또는 `.streamlit/secrets.toml`에 등록해두세요.)")
-        entered_key = st.text_input("Anthropic API 키", type="password", key="anthropic_api_key_input")
-        if entered_key:
-            st.session_state.anthropic_api_key = entered_key
-            st.rerun()
+    if not root_folder_id:
+        st.warning("구글 드라이브 저장 폴더 ID(GDRIVE_ROOT_FOLDER_ID)가 설정되어 있지 않습니다. .streamlit/secrets.toml에 추가해주세요.")
         return
 
-    generate_clicked = st.button("📝 리포트 생성하기", type="primary")
+    birth_str = birth_date.strftime("%Y%m%d") if birth_date else "생년월일미상"
 
-    if generate_clicked:
-        result_holder = {}
-        try:
-            full_text = st.write_stream(
-                report_pipeline.stream_report(saju_data, api_key, result_holder=result_holder)
-            )
-        except Exception as e:
-            st.error(f"리포트 생성 중 오류가 발생했습니다: {e}")
-            return
-        st.session_state.generated_report = full_text
-        st.session_state.pop('verification_result', None)
-        st.session_state.pop('verification_decision', None)
-        st.session_state.pop('generated_pdf', None)
-        final_message = result_holder.get('final_message')
-        if final_message:
-            warn = "⚠️ 분량 제한에 걸려 리포트가 끝까지 완성되지 못했습니다. 아래 결과는 중간까지만 포함되어 있습니다." if final_message.stop_reason == "max_tokens" else None
-            st.session_state.generated_report_meta = {
-                'warn': warn,
-                'usage_caption': report_pipeline.usage_caption(final_message.usage),
-            }
-    elif st.session_state.get('generated_report'):
-        st.markdown(st.session_state.generated_report)
-
-    if st.session_state.get('generated_report'):
-        meta = st.session_state.get('generated_report_meta') or {}
-        if meta.get('warn'):
-            st.warning(meta['warn'])
-        if meta.get('usage_caption'):
-            st.caption(meta['usage_caption'])
-        st.download_button(
-            "💾 리포트 다운로드 (.md)",
-            data=st.session_state.generated_report,
-            file_name=f"{customer_name}_인생전략리포트.md",
-            mime="text/markdown",
-        )
-
-        st.write("")
-        render_report_verification_section(saju_data, api_key)
-
-        st.write("")
-        render_pdf_export_section(saju_data, customer_name)
-
-
-def render_pdf_export_section(saju_data, customer_name):
-    """3단계: 완성된 리포트 텍스트 + saju_data(JSON)를 pdf_report.py 템플릿에 흘려 넣어
-    실제 PDF 파일로 렌더링하는 섹션. 스냅샷의 원국·오행·대운·용신 수치는 리포트 텍스트가
-    아니라 항상 saju_data에서 직접 읽으므로, AI가 쓴 문장과 무관하게 정확하다."""
-    st.subheader("📄 PDF로 저장")
-    st.caption("위 리포트를 세로형 문서 템플릿에 흘려 넣어 챕터별로 페이지가 나뉜 완성된 PDF를 만듭니다. 몇 초 정도 걸릴 수 있습니다.")
-
-    if st.button("📄 PDF 생성하기"):
-        try:
-            with st.spinner("PDF 생성 중..."):
-                pdf_bytes = pdf_report.build_pdf(st.session_state.generated_report, saju_data)
-        except Exception as e:
-            st.error(f"PDF 생성 중 오류가 발생했습니다: {e}")
-            return
-        st.session_state.generated_pdf = pdf_bytes
-
-    if st.session_state.get('generated_pdf'):
-        st.download_button(
-            "💾 PDF 다운로드",
-            data=st.session_state.generated_pdf,
-            file_name=f"{customer_name}_프리미엄종합사주해답지.pdf",
-            mime="application/pdf",
-        )
-
-
-def render_report_verification_section(saju_data, api_key):
-    """생성된 리포트를 원본 JSON·지침 기준으로 검수하고, 필요하면 수정본을 다시 만드는 섹션."""
-    st.subheader("🔍 리포트 검수")
-
-    verify_clicked = st.button("🔍 검증할까요?")
-    if verify_clicked:
-        result_holder = {}
-        try:
-            verification_text = st.write_stream(
-                report_pipeline.stream_verification(
-                    st.session_state.generated_report, saju_data, api_key, result_holder=result_holder
-                )
-            )
-        except Exception as e:
-            st.error(f"검증 중 오류가 발생했습니다: {e}")
-            return
-        st.session_state.verification_result = verification_text
-        st.session_state.pop('verification_decision', None)
-    elif st.session_state.get('verification_result'):
-        st.markdown(st.session_state.verification_result)
-
-    verification_text = st.session_state.get('verification_result')
-    if not verification_text:
-        return
-
-    if report_pipeline.is_clean_verification(verification_text):
-        st.success("✅ 검수 결과 이상 없습니다.")
-        return
-
-    decision = st.session_state.get('verification_decision')
-    if decision == 'revised':
-        st.info("✏️ 위 문제를 반영해 리포트를 다시 작성했습니다. 위쪽 리포트 내용이 수정본으로 교체되었습니다.")
-        return
-    if decision == 'proceeded':
-        st.info("➡️ 수정 없이 현재 리포트로 진행합니다.")
-        return
-
-    st.markdown("**수정해서 다시 출력할까요, 그냥 진행할까요?**")
-    col1, col2 = st.columns(2)
-    with col1:
-        revise_clicked = st.button("✏️ 수정해서 다시 출력", type="primary")
-    with col2:
-        proceed_clicked = st.button("➡️ 그냥 진행")
-
-    if revise_clicked:
-        result_holder = {}
-        try:
-            revised_text = st.write_stream(
-                report_pipeline.stream_revision(
-                    st.session_state.generated_report, saju_data, verification_text, api_key,
-                    result_holder=result_holder
-                )
-            )
-        except Exception as e:
-            st.error(f"수정본 생성 중 오류가 발생했습니다: {e}")
-            return
-        st.session_state.generated_report = revised_text
-        st.session_state.pop('generated_pdf', None)
-        final_message = result_holder.get('final_message')
-        if final_message:
-            st.session_state.generated_report_meta = {
-                'warn': "⚠️ 분량 제한에 걸려 리포트가 끝까지 완성되지 못했습니다." if final_message.stop_reason == "max_tokens" else None,
-                'usage_caption': report_pipeline.usage_caption(final_message.usage),
-            }
-        st.session_state.verification_decision = 'revised'
-        st.rerun()
-    elif proceed_clicked:
-        st.session_state.verification_decision = 'proceeded'
-        st.rerun()
+    if st.button("📤 구글 드라이브로 전송", type="primary", use_container_width=True):
+        with st.spinner("구글 드라이브로 전송 중..."):
+            ok, result = gdrive_uploader.upload_saju_data(customer_name, birth_str, saju_data, root_folder_id)
+        if ok:
+            customer_url = f"https://drive.google.com/file/d/{result['customer']}/view"
+            lines = [f"전송 완료! [신청인 분석 파일 열어보기]({customer_url})"]
+            if 'partner' in result:
+                partner_url = f"https://drive.google.com/file/d/{result['partner']}/view"
+                lines.append(f"[상대방 분석 파일 열어보기]({partner_url}) (별도 파일로 저장됨)")
+            st.success("  \n".join(lines))
+        else:
+            st.error(f"전송 실패: {result}")
 
 
 def render_result_screen():
     analyzer = st.session_state.analyzer
     d = st.session_state.saju_data
+    input_data = st.session_state.get('input_data', {})
 
     st.header(f"🔮 {analyzer.name} 님의 사주 정보")
     saju_type = "사주팔자(四柱八字)" if analyzer.hour else "사주삼주(三柱 - 시간모름)"
@@ -1645,7 +1510,7 @@ def render_result_screen():
     )
 
     st.write("---")
-    render_report_generation_section(d, analyzer.name)
+    render_gdrive_upload_section(d, analyzer.name, input_data.get('birth_date'))
 
     st.write("---")
     st.caption("아래는 참고용 요약 화면입니다.")
@@ -1798,20 +1663,30 @@ def render_result_screen():
 
 def main():
     st.set_page_config(
-        page_title="사주명리 분석 자동화 V8 통합 플랫폼",
+        page_title="답답명쾌 사주해답소",
         page_icon="🔮",
         layout="centered",
         initial_sidebar_state="collapsed",
     )
-    st.title("🔮 포스텔러 스타일 만세력")
+    st.markdown("""
+        <style>
+        .stApp { background-color: #ffffff; color: #222222; }
+        .stTextInput>div>div>input, .stTextArea textarea { background-color: #ffffff; color: #222222; border: 1px solid #e0a800; border-radius: 5px; }
+        .stSelectbox>div>div>div { background-color: #ffffff; color: #222222; border: 1px solid #e0a800; border-radius: 5px; }
+        .stButton>button { background-color: #ffcd4a; color: #222222; font-weight: bold; border-radius: 5px; border: none; width: 100%; }
+        h1, h2, h3, p, label { color: #222222 !important; }
+        .stAlert { background-color: rgba(255, 205, 74, 0.15); color: #222222; }
+        @media (max-width: 480px) {
+            .block-container { padding-left: 1rem; padding-right: 1rem; }
+        }
+        </style>
+    """, unsafe_allow_html=True)
 
     if 'step' not in st.session_state:
         st.session_state.step = 'input'
 
     if st.session_state.step == 'input':
         render_input_screen()
-    elif st.session_state.step == 'confirm':
-        render_confirm_screen()
     elif st.session_state.step == 'result':
         render_result_screen()
     else:
