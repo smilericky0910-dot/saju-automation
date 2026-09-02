@@ -87,6 +87,9 @@ def upload_saju_data(customer_name, customer_birth_str, saju_data, root_folder_i
         now = datetime.now()
         month_folder_id = get_or_create_folder(service, now.strftime("%Y-%m"), root_folder_id)
         day_folder_id = get_or_create_folder(service, now.strftime("%Y-%m-%d"), month_folder_id)
+        # n8n의 Google Drive Trigger는 하위 폴더(날짜별 정리 구조) 안의 변경은 감지하지 못해서,
+        # 날짜별 보관용 저장과는 별도로 n8n이 감지할 평평한(flat) 폴더에도 같은 파일을 하나 더 저장한다.
+        inbox_folder_id = get_or_create_folder(service, "n8n_인박스", root_folder_id)
 
         # 신청인 파일: compatibility에서 partner_saju(상대방 전체 분석)는 빼고,
         # 상대방이 누구인지 식별할 수 있는 정보(이름/성별/유형 등)만 남긴다 — 실제 상대방 분석은 별도 파일로 저장.
@@ -99,6 +102,7 @@ def upload_saju_data(customer_name, customer_birth_str, saju_data, root_folder_i
         customer_file_name = f"{customer_name}_{safe_birth_str}_사주분석결과.txt"
         customer_content = format_saju_data_to_json(customer_data)
         file_ids = {'customer': _upload_text_file(service, day_folder_id, customer_file_name, customer_content)}
+        _upload_text_file(service, inbox_folder_id, customer_file_name, customer_content)
 
         if compat.get('requested') and partner_saju:
             partner_name = compat.get('partner_name') or "상대방"
@@ -106,6 +110,7 @@ def upload_saju_data(customer_name, customer_birth_str, saju_data, root_folder_i
             partner_file_name = f"{partner_name}_{_safe_str(partner_birth)}_사주분석결과(궁합상대방).txt"
             partner_content = format_saju_data_to_json(partner_saju)
             file_ids['partner'] = _upload_text_file(service, day_folder_id, partner_file_name, partner_content)
+            _upload_text_file(service, inbox_folder_id, partner_file_name, partner_content)
 
         return True, file_ids
 
