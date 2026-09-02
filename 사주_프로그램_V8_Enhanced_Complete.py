@@ -1457,34 +1457,50 @@ def _json_safe(obj):
         return [_json_safe(v) for v in obj]
     return obj
 
-def render_gdrive_upload_section(saju_data, customer_name, birth_date):
-    st.subheader("📤 구글 드라이브로 전송")
-    st.caption("사주분석엔진이 계산한 결과값 전체(위 JSON과 동일 — 원국/오행/십성/신강신약/용신/대운/세운/신살/배우자운·재운·직업운 등 누락 없이 전부)를 텍스트 파일(.txt, 내용은 JSON 그대로)로 구글 드라이브의 날짜별 폴더에 저장합니다. 노트북LM 등에 소스로 바로 추가할 수 있는 형태입니다. 궁합 분석을 함께 신청해 상대방 사주도 계산된 경우, 두 사람 분석은 합치지 않고 완전히 별도의 파일 두 개로 나눠서 저장합니다.")
-
+def _get_config(key):
     try:
-        root_folder_id = st.secrets.get("GDRIVE_ROOT_FOLDER_ID")
+        val = st.secrets.get(key)
     except Exception:
-        root_folder_id = None
-    root_folder_id = root_folder_id or os.environ.get("GDRIVE_ROOT_FOLDER_ID")
+        val = None
+    return val or os.environ.get(key)
+
+
+def render_gdrive_upload_section(saju_data, customer_name, birth_date):
+    st.subheader("📤 사주 정보 전송")
+    st.caption("사주분석엔진이 계산한 결과값 전체(위 JSON과 동일 — 원국/오행/십성/신강신약/용신/대운/세운/신살/배우자운·재운·직업운 등 누락 없이 전부)를 구글 드라이브(백업용 보관)와 n8n 풀이 파이프라인(웹훅)에 함께 전송합니다. 궁합 분석을 함께 신청해 상대방 사주도 계산된 경우, 두 사람 분석은 합치지 않고 완전히 별도로 전송합니다.")
+
+    root_folder_id = _get_config("GDRIVE_ROOT_FOLDER_ID")
+    webhook_url = _get_config("N8N_WEBHOOK_URL")
+    webhook_secret = _get_config("N8N_WEBHOOK_SECRET")
 
     if not root_folder_id:
         st.warning("구글 드라이브 저장 폴더 ID(GDRIVE_ROOT_FOLDER_ID)가 설정되어 있지 않습니다. .streamlit/secrets.toml에 추가해주세요.")
-        return
+    if not webhook_url or not webhook_secret:
+        st.warning("n8n 웹훅 설정(N8N_WEBHOOK_URL / N8N_WEBHOOK_SECRET)이 없습니다. .streamlit/secrets.toml에 추가해주세요.")
 
     birth_str = birth_date.strftime("%Y%m%d") if birth_date else "생년월일미상"
 
-    if st.button("📤 구글 드라이브로 전송", type="primary", use_container_width=True):
-        with st.spinner("구글 드라이브로 전송 중..."):
-            ok, result = gdrive_uploader.upload_saju_data(customer_name, birth_str, saju_data, root_folder_id)
-        if ok:
-            customer_url = f"https://drive.google.com/file/d/{result['customer']}/view"
-            lines = [f"전송 완료! [신청인 분석 파일 열어보기]({customer_url})"]
-            if 'partner' in result:
-                partner_url = f"https://drive.google.com/file/d/{result['partner']}/view"
-                lines.append(f"[상대방 분석 파일 열어보기]({partner_url}) (별도 파일로 저장됨)")
-            st.success("  \n".join(lines))
-        else:
-            st.error(f"전송 실패: {result}")
+    if st.button("📤 전송", type="primary", use_container_width=True):
+        if root_folder_id:
+            with st.spinner("구글 드라이브로 백업 저장 중..."):
+                ok, result = gdrive_uploader.upload_saju_data(customer_name, birth_str, saju_data, root_folder_id)
+            if ok:
+                customer_url = f"https://drive.google.com/file/d/{result['customer']}/view"
+                lines = [f"드라이브 백업 완료! [신청인 분석 파일 열어보기]({customer_url})"]
+                if 'partner' in result:
+                    partner_url = f"https://drive.google.com/file/d/{result['partner']}/view"
+                    lines.append(f"[상대방 분석 파일 열어보기]({partner_url}) (별도 파일로 저장됨)")
+                st.success("  \n".join(lines))
+            else:
+                st.error(f"드라이브 백업 실패: {result}")
+
+        if webhook_url and webhook_secret:
+            with st.spinner("n8n 풀이 파이프라인으로 전송 중..."):
+                ok2, err2 = gdrive_uploader.send_to_n8n_webhook(customer_name, birth_str, saju_data, webhook_url, webhook_secret)
+            if ok2:
+                st.success("n8n으로 전송 완료! 풀이 파이프라인이 시작됩니다.")
+            else:
+                st.error(f"n8n 전송 실패: {err2}")
 
 
 def render_result_screen():
