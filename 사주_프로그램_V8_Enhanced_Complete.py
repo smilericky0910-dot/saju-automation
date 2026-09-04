@@ -16,7 +16,6 @@
 import streamlit as st
 import math
 import datetime
-import json
 import os
 
 import gdrive_uploader
@@ -1449,14 +1448,6 @@ def render_input_screen():
             except Exception as e:
                 st.error(f"입력하신 정보로 사주를 계산할 수 없습니다: {e}")
 
-def _json_safe(obj):
-    """compute_all() dict를 json.dumps 가능한 형태로 변환(frozenset/set/tuple 은 list)."""
-    if isinstance(obj, dict):
-        return {str(k): _json_safe(v) for k, v in obj.items()}
-    if isinstance(obj, (list, tuple, set, frozenset)):
-        return [_json_safe(v) for v in obj]
-    return obj
-
 def _get_config(key):
     try:
         val = st.secrets.get(key)
@@ -1467,33 +1458,17 @@ def _get_config(key):
 
 def render_gdrive_upload_section(saju_data, customer_name, birth_date):
     st.subheader("📤 사주 정보 전송")
-    st.caption("사주분석엔진이 계산한 결과값 전체(위 JSON과 동일 — 원국/오행/십성/신강신약/용신/대운/세운/신살/배우자운·재운·직업운 등 누락 없이 전부)를 구글 드라이브(백업용 보관)와 n8n 풀이 파이프라인(웹훅)에 함께 전송합니다. 궁합 분석을 함께 신청해 상대방 사주도 계산된 경우, 두 사람 분석은 합치지 않고 완전히 별도로 전송합니다.")
+    st.caption("사주분석엔진이 계산한 결과값 전체(원국/오행/십성/신강신약/용신/대운/세운/신살/배우자운·재운·직업운 등 누락 없이 전부)를 n8n 풀이 파이프라인(웹훅)으로 전송합니다. 궁합 분석을 함께 신청해 상대방 사주도 계산된 경우, 두 사람 분석은 합치지 않고 완전히 별도로 전송합니다.")
 
-    root_folder_id = _get_config("GDRIVE_ROOT_FOLDER_ID")
     webhook_url = _get_config("N8N_WEBHOOK_URL")
     webhook_secret = _get_config("N8N_WEBHOOK_SECRET")
 
-    if not root_folder_id:
-        st.warning("구글 드라이브 저장 폴더 ID(GDRIVE_ROOT_FOLDER_ID)가 설정되어 있지 않습니다. .streamlit/secrets.toml에 추가해주세요.")
     if not webhook_url or not webhook_secret:
         st.warning("n8n 웹훅 설정(N8N_WEBHOOK_URL / N8N_WEBHOOK_SECRET)이 없습니다. .streamlit/secrets.toml에 추가해주세요.")
 
     birth_str = birth_date.strftime("%Y%m%d") if birth_date else "생년월일미상"
 
     if st.button("📤 전송", type="primary", use_container_width=True):
-        if root_folder_id:
-            with st.spinner("구글 드라이브로 백업 저장 중..."):
-                ok, result = gdrive_uploader.upload_saju_data(customer_name, birth_str, saju_data, root_folder_id)
-            if ok:
-                customer_url = f"https://drive.google.com/file/d/{result['customer']}/view"
-                lines = [f"드라이브 백업 완료! [신청인 분석 파일 열어보기]({customer_url})"]
-                if 'partner' in result:
-                    partner_url = f"https://drive.google.com/file/d/{result['partner']}/view"
-                    lines.append(f"[상대방 분석 파일 열어보기]({partner_url}) (별도 파일로 저장됨)")
-                st.success("  \n".join(lines))
-            else:
-                st.error(f"드라이브 백업 실패: {result}")
-
         if webhook_url and webhook_secret:
             with st.spinner("n8n 풀이 파이프라인으로 전송 중..."):
                 ok2, err2 = gdrive_uploader.send_to_n8n_webhook(customer_name, birth_str, saju_data, webhook_url, webhook_secret)
@@ -1512,20 +1487,6 @@ def render_result_screen():
     saju_type = "사주팔자(四柱八字)" if analyzer.hour else "사주삼주(三柱 - 시간모름)"
     st.caption(f"{analyzer.sex} · {saju_type} · 일간 {analyzer.day_master}({STEM_INFO[analyzer.day_master]['name']})")
 
-    st.subheader("🗂️ 사주 정보 (JSON — 풀이 단계에서 그대로 읽어가는 원본 데이터)")
-    st.caption("이 화면 아래 카드들은 관리자가 대충 훑어보기 위한 참고용이고, 실제 풀이는 이 JSON을 기준으로 진행합니다. 배우자운/재운/직업운 등 서술형 계산 결과도 여기엔 전부 포함되어 있습니다.")
-    json_data = _json_safe(d)
-    json_text = json.dumps(json_data, ensure_ascii=False, indent=2)
-    with st.expander("📦 JSON 펼쳐보기", expanded=False):
-        st.code(json_text, language="json")
-    st.download_button(
-        "💾 사주 정보 JSON 다운로드 (.json)",
-        data=json_text,
-        file_name=f"{analyzer.name}_사주정보.json",
-        mime="application/json",
-    )
-
-    st.write("---")
     render_gdrive_upload_section(d, analyzer.name, input_data.get('birth_date'))
 
     st.write("---")
@@ -1656,16 +1617,6 @@ def render_result_screen():
         st.markdown(" ".join(f"`{b}`" for b in badges))
     else:
         st.caption("해당하는 주요 신살이 없습니다.")
-
-    st.write("---")
-    with st.expander("📄 상세 텍스트 리포트 보기"):
-        st.code(st.session_state.report_text, language="text")
-        st.download_button(
-            "💾 텍스트 리포트 다운로드 (.txt)",
-            data=st.session_state.report_text,
-            file_name=f"{analyzer.name}_사주정보.txt",
-            mime="text/plain",
-        )
 
     st.write("")
     if st.button("← 처음부터 다시"):
