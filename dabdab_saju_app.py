@@ -1,16 +1,8 @@
 # -*- coding: utf-8 -*-
 """
 사주분석 대화형 웹 애플리케이션 제8판 (Complete Enhanced Version)
-- 작성일: 2026-08-26
+- 작성일: 2026-08-26 / 수정일: 2026-09-05
 - 기술 스택: Python, Streamlit
-- 주요 향상사항:
-  ✅ 納音五行(납음오행) 추가
-  ✅ 形(형)/害(해) 분석 추가
-  ✅ 公望(공망) 계산 추가
-  ✅ 月令(월령) 판정 추가
-  ✅ 小限(소한)/世運(세운) 추가
-  ✅ 格局(격국) 자동 판별 추가
-  ✅ 인생영역별 분석 (배우자운, 재운, 직업운) 추가
 """
 
 import streamlit as st
@@ -43,9 +35,6 @@ for i in range(60):
 
 MONTH_BRANCHES = ['寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥', '子', '丑']
 
-# ============================================================================
-# 출생 도시별 경도 시차 보정표(분 단위) - 표준 경도 135°E(동경 135도) 기준
-# ============================================================================
 CITY_LONGITUDE_OFFSETS = {
     "서울특별시": -32, "부산광역시": -24, "대구광역시": -26, "인천광역시": -33,
     "광주광역시": -33, "대전광역시": -30, "울산광역시": -23, "세종특별자치시": -31,
@@ -317,7 +306,7 @@ def convert_to_pillars(year, month, day, hour=None, minute=0, is_lunar=False, is
         month_idx = 11 
     else:
         for m in range(11):
-            if jeolgi_jds[m] <= birth_jd < jeolgi_jds[m+1]:
+            if jeolgi_jds[m] <= birth_jd < jeolgi_jds[m + 1]:
                 month_idx = m
                 break
         if month_idx == -1 and jeolgi_jds[11] <= birth_jd < next_ipchun_jd:
@@ -409,7 +398,7 @@ def convert_to_pillars(year, month, day, hour=None, minute=0, is_lunar=False, is
         step = i if is_forward else -i
         p_idx = (month_pillar_idx + step) % 60
         pillar_str = GANJI_60[p_idx]
-        daewoon_pillars.append((daewoon_num + (i-1)*10, pillar_str[0], pillar_str[1]))
+        daewoon_pillars.append((daewoon_num + (i - 1) * 10, pillar_str[0], pillar_str[-1]))
         
     return (year_stem, year_branch), (month_stem, month_branch), (day_stem, day_branch), hour_p, daewoon_num, daewoon_pillars, is_forward, lst_dt
 
@@ -430,7 +419,7 @@ _GUCKGUK_BY_SIPSIN = {
 
 def determine_guckguk_by_wolji(day_master, month_branch):
     jijanggan = BRANCH_INFO[month_branch]['jijanggan']
-    jeonggi_stem = max(jijanggan.items(), key=lambda x: x[1])[0]
+    jeonggi_stem = max(jijanggan.items(), key=lambda x: x)[0]
     sipsin = determine_ten_deity(day_master, jeonggi_stem, is_branch=False)
 
     if sipsin in _GUCKGUK_BY_SIPSIN:
@@ -470,11 +459,26 @@ class AdvancedSajuAnalyzer:
         self.profile = profile or {}
         self.compatibility = compatibility or {'requested': False}
         self.day_master = day_pillar[0]
-        self.stems = [self.year[0], self.month[0], self.day[0]]
-        self.branches = [self.year[1], self.month[1], self.day[1]]
+        
+        y_stem, y_branch = self.year
+        m_stem, m_branch = self.month
+        d_stem, d_branch = self.day
+        
+        self.y_stem = y_stem
+        self.y_branch = y_branch
+        self.m_stem = m_stem
+        self.m_branch = m_branch
+        self.d_stem = d_stem
+        self.d_branch = d_branch
+        
+        self.stems = [y_stem, m_stem, d_stem]
+        self.branches = [y_branch, m_branch, d_branch]
         if self.hour:
-            self.stems.append(self.hour[0])
-            self.branches.append(self.hour[1])
+            h_stem, h_branch = self.hour
+            self.h_stem = h_stem
+            self.h_branch = h_branch
+            self.stems.append(h_stem)
+            self.branches.append(h_branch)
             
     def calculate_raw_element_scores(self):
         scores = {'木': 0.0, '火': 0.0, '土': 0.0, '金': 0.0, '水': 0.0}
@@ -505,9 +509,12 @@ class AdvancedSajuAnalyzer:
             'xing_hae': []
         }
         
-        adjacent_stem_pairs = [('년간-월간', self.stems[0], self.stems[1]), ('월간-일간', self.stems[1], self.stems[2])]
+        adjacent_stem_pairs = [
+            ('년간-월간', self.y_stem, self.m_stem),
+            ('월간-일간', self.m_stem, self.d_stem)
+        ]
         if self.hour:
-            adjacent_stem_pairs.append(('일간-시간', self.stems[2], self.stems[3]))
+            adjacent_stem_pairs.append(('일간-시간', self.d_stem, self.h_stem))
             
         for name, s1, s2 in adjacent_stem_pairs:
             if (s1, s2) in STEM_COMBINATIONS:
@@ -531,9 +538,12 @@ class AdvancedSajuAnalyzer:
                         'combination': comb_set, 'target_element': info['target'], 'name': info['name'], 'desc': f"{info['name']}"
                     })
                     
-        adjacent_branch_pairs = [('년지-월지', self.branches[0], self.branches[1]), ('월지-일지', self.branches[1], self.branches[2])]
+        adjacent_branch_pairs = [
+            ('년지-월지', self.y_branch, self.m_branch),
+            ('월지-일지', self.m_branch, self.d_branch)
+        ]
         if self.hour:
-            adjacent_branch_pairs.append(('일지-시지', self.branches[2], self.branches[3]))
+            adjacent_branch_pairs.append(('일지-시지', self.d_branch, self.h_branch))
             
         for name, b1, b2 in adjacent_branch_pairs:
             if (b1, b2) in BRANCH_SIX_COMBINATIONS:
@@ -608,7 +618,7 @@ class AdvancedSajuAnalyzer:
             if other_elem != me_elem and RELATION_MAP.get((me_elem, other_elem)) == '인성':
                 helpers.append(other_elem)
 
-        season_info = get_season_multipliers(self.month[1])
+        season_info = get_season_multipliers(self.m_branch)
         weighted_scores = {elem: scores[elem] * season_info['multipliers'][elem] for elem in scores}
         total_score = sum(weighted_scores.values())
         helper_score = sum(weighted_scores[elem] for elem in helpers)
@@ -646,18 +656,18 @@ class AdvancedSajuAnalyzer:
         adj_strength = self.analyze_strength(adj_scores)
 
         eokbu_elem = self.determine_yongshin(adj_scores, adj_strength)
-        johu_info = analyze_johu_yongshin(self.month[1], adj_scores)
+        johu_info = analyze_johu_yongshin(self.m_branch, adj_scores)
         tonggwan_info = analyze_tonggwan_yongshin(adj_scores)
 
         positions = ['년간', '년지', '월간', '월지', '일간(본인)', '일지']
         eight_chars_list = [
-            (self.stems[0], False), (self.branches[0], True),
-            (self.stems[1], False), (self.branches[1], True),
-            (self.stems[2], False), (self.branches[2], True)
+            (self.y_stem, False), (self.y_branch, True),
+            (self.m_stem, False), (self.m_branch, True),
+            (self.d_stem, False), (self.d_branch, True)
         ]
         if self.hour:
             positions.extend(['시간', '시지'])
-            eight_chars_list.extend([(self.stems[3], False), (self.branches[3], True)])
+            eight_chars_list.extend([(self.h_stem, False), (self.h_branch, True)])
 
         deities = {}
         unseong_list = []
@@ -679,7 +689,8 @@ class AdvancedSajuAnalyzer:
             if is_branch:
                 unseong_val = UNSEONG_MAP[self.day_master].get(char, "-")
                 unseong_list.append(unseong_val)
-                sinsal_val = get_sinsal(self.branches[2] if idx == 1 else self.branches[0], char)
+                base_branch = self.d_branch if idx == 1 else self.y_branch
+                sinsal_val = get_sinsal(base_branch, char)
                 sinsal_list.append(sinsal_val)
                 jijanggan_list.append(''.join(BRANCH_INFO[char]['jijanggan'].keys()))
             else:
@@ -688,20 +699,20 @@ class AdvancedSajuAnalyzer:
                 jijanggan_list.append("-")
 
         month_deity = deities.get('월간', '')
-        guckguk_info = determine_guckguk_by_wolji(self.day_master, self.month[1])
+        guckguk_info = determine_guckguk_by_wolji(self.day_master, self.m_branch)
         marriage_info = analyze_marriage_luck(month_deity, adj_scores, self.sex)
         wealth_info = analyze_wealth_luck(self.day_master, adj_scores, adj_strength['strength'])
         career_info = analyze_career_luck(self.day_master, adj_scores)
 
-        year_ganji = self.year[0] + self.year[1]
+        year_ganji = self.y_stem + self.y_branch
         naeum_info = get_naeum_ohaeng(year_ganji)
-        gongmang_info = calculate_gongmang(self.day[0], self.day[1])
+        gongmang_info = calculate_gongmang(self.d_stem, self.d_branch)
         gongmang_branches = gongmang_info['branches']
-        deukryeong_info = classify_deukryeong(UNSEONG_MAP[self.day_master].get(self.month[1], '-'))
+        deukryeong_info = classify_deukryeong(UNSEONG_MAP[self.day_master].get(self.m_branch, '-'))
 
-        dohwasal_info = check_dohwasal(self.day[1], self.branches)
+        dohwasal_info = check_dohwasal(self.d_branch, self.branches)
         yanginsal_info = check_yanginsal(self.day_master, UNSEONG_MAP, self.branches)
-        goegangsal_info = check_goegangsal(self.day[0] + self.day[1])
+        goegangsal_info = check_goegangsal(self.d_stem + self.d_branch)
         cheoneul_info = check_cheoneul_gwiin(self.day_master, self.branches)
         munchang_info = check_munchang_gwiin(self.day_master, self.branches)
         wonjinsal_list = check_wonjinsal(self.branches)
@@ -796,9 +807,6 @@ class AdvancedSajuAnalyzer:
         ]
         return "\n".join(report)
 
-# ============================================================================
-# [Streamlit UI]
-# ============================================================================
 ELEMENT_COLORS = {
     '木': ('#e8f5e9', '#2e7d32'),
     '火': ('#ffebee', '#c62828'),
@@ -842,7 +850,7 @@ def _pillar_card_html(label, stem, stem_deity, branch, branch_deity, jijanggan, 
 
 def render_input_screen():
     st.markdown("### 🔮 답답명쾌 사주해답소 - 분석 정보 입력")
-    col1, col2 = st.columns([1, 1])
+    col1, col2 = st.columns(2)
     with col1:
         st.markdown("**이름**")
         name = st.text_input("이름", value="", max_chars=12, placeholder="이름 입력", label_visibility="collapsed")
@@ -852,7 +860,7 @@ def render_input_screen():
         sex_internal = "남성" if sex == "남자" else "여성"
 
     st.markdown("**생년월일시**")
-    col1, col2, col3, col4, col5 = st.columns([1.5, 1.2, 1, 1, 1.8])
+    col1, col2, col3, col4, col5 = st.columns([15, 12, 10, 10, 18])
     with col1:
         calendar_type = st.selectbox("양력/음력", ["양력", "음력", "음력(윤달)"], label_visibility="collapsed")
     with col2:
@@ -879,7 +887,7 @@ def render_input_screen():
     is_lunar = calendar_type in ["음력", "음력(윤달)"]
     is_leap = calendar_type == "음력(윤달)"
     
-    col4, col5 = st.columns([1, 1.5])
+    col4, col5 = st.columns([10, 15])
     with col4:
         time_unknown = st.checkbox("시간 모름")
     with col5:
@@ -892,6 +900,13 @@ def render_input_screen():
     city = st.selectbox("도시명", city_options, index=city_options.index("서울특별시"), label_visibility="collapsed")
     region_offset_mins = st.slider("경도 보정(분)", -45, 0, -30) if city == "직접입력(해외 등)" else CITY_LONGITUDE_OFFSETS[city]
         
+    st.markdown("**고객 연락처 (리포트 발송용)**")
+    c_col1, c_col2 = st.columns(2)
+    with c_col1:
+        phone = st.text_input("휴대폰 번호", placeholder="휴대폰 번호 (예: 010-1234-5678)", label_visibility="collapsed")
+    with c_col2:
+        email = st.text_input("이메일", placeholder="이메일 주소 (예: user@example.com)", label_visibility="collapsed")
+
     st.markdown("**고객 고민 / 추가 전달 사항**")
     deep_question = st.text_area("고객 고민", placeholder="현재 고민이나 궁금한 점을 적어주시면 AI 분석 시 반영됩니다.", height=100, label_visibility="collapsed")
 
@@ -910,7 +925,7 @@ def render_input_screen():
             if compat_type_custom.strip():
                 compat_type = f"기타 ({compat_type_custom.strip()})"
         partner_label = "반려동물" if compat_type == "반려동물 궁합" else "상대방"
-        pcol1, pcol2 = st.columns([1, 1])
+        pcol1, pcol2 = st.columns(2)
         with pcol1:
             partner_name = st.text_input(f"{partner_label} 이름", key="partner_name")
         with pcol2:
@@ -918,7 +933,7 @@ def render_input_screen():
 
         partner_birth_known = st.checkbox("생년월일을 알아요", key="partner_birth_known")
         if partner_birth_known:
-            qcol1, qcol2, qcol3, qcol4, qcol5 = st.columns([1.5, 1.2, 1, 1, 1.8])
+            qcol1, qcol2, qcol3, qcol4, qcol5 = st.columns([15, 12, 10, 10, 18])
             with qcol1:
                 p_calendar_type = st.selectbox("양력/음력", ["양력", "음력", "음력(윤달)"], key="partner_calendar_type", label_visibility="collapsed")
             with qcol2:
@@ -968,6 +983,8 @@ def render_input_screen():
             <tr style="border-bottom: 1px solid #e0e0e0;"><th style="padding: 12px; background-color: #f7f9fa; border-right: 1px solid #e0e0e0;">생년월일</th><td style="padding: 12px;">{birth_date.strftime('%Y년 %m월 %d일')} ({cal_str})</td></tr>
             <tr style="border-bottom: 1px solid #e0e0e0;"><th style="padding: 12px; background-color: #f7f9fa; border-right: 1px solid #e0e0e0;">태어난 시간</th><td style="padding: 12px;">{time_str} ({time_boundary})</td></tr>
             <tr style="border-bottom: 1px solid #e0e0e0;"><th style="padding: 12px; background-color: #f7f9fa; border-right: 1px solid #e0e0e0;">출생 도시</th><td style="padding: 12px;">{city} (보정: {region_offset_mins}분)</td></tr>
+            <tr style="border-bottom: 1px solid #e0e0e0;"><th style="padding: 12px; background-color: #f7f9fa; border-right: 1px solid #e0e0e0;">휴대폰</th><td style="padding: 12px;">{phone.strip() if phone and phone.strip() else '미입력'}</td></tr>
+            <tr style="border-bottom: 1px solid #e0e0e0;"><th style="padding: 12px; background-color: #f7f9fa; border-right: 1px solid #e0e0e0;">이메일</th><td style="padding: 12px;">{email.strip() if email and email.strip() else '미입력'}</td></tr>
             <tr><th style="padding: 12px; background-color: #f7f9fa; border-right: 1px solid #e0e0e0;">고객 고민</th><td style="padding: 12px;">{deep_question if deep_question.strip() else '없음'}</td></tr>
         </table><br/>
         """
@@ -1002,7 +1019,10 @@ def render_input_screen():
                     'marital_status': None, 'has_children': None, 'job_status': None,
                     'deep_question': deep_question.strip() if deep_question.strip() else None,
                 },
-                'contact': {'phone': None, 'email': None, 'delivery_method': "카카오톡 남기기"},
+                'contact': {
+                    'phone': phone.strip() if phone else "",
+                    'email': email.strip() if email else ""
+                },
                 'compatibility': {'requested': False},
             }
             st.session_state.input_data = data
@@ -1068,81 +1088,117 @@ def _get_config(key):
     return val or os.environ.get(key)
 
 def render_gdrive_upload_section(saju_data, customer_name, birth_date):
-    st.write("---")
-    st.subheader("📄 프리미엄 사주 해답지 PDF 자동 생성")
-    st.caption("클로드 소넷 AI가 v5.0 지침서에 따라 19개 챕터의 심층 풀이를 작성하고 프리미엄 PDF로 즉시 렌더링합니다.")
+  st.write("---")
+  st.subheader("📄 프리미엄 사주 해답지 PDF 생성 및 드라이브 저장")
+  st.caption(
+      "클로드 소넷 AI가 19개 챕터를 작성하고, PDF로 렌더링한 후 구글"
+      " 드라이브(월/일 폴더)로 자동 전송합니다."
+  )
 
-    if st.button("✨ 프리미엄 사주 리포트 PDF 생성 (클로드 소넷)", type="primary", use_container_width=True):
-        current_saju_data = st.session_state.get('saju_data')
-        current_analyzer = st.session_state.get('analyzer')
-        customer_name = current_analyzer.name if current_analyzer else current_saju_data.get('meta', {}).get('name', '고객')
+  if st.button(
+      "✨ 프리미엄 사주 리포트 생성 및 드라이브 전송",
+      type="primary",
+      use_container_width=True,
+  ):
+    current_saju_data = st.session_state.get("saju_data")
+    current_analyzer = st.session_state.get("analyzer")
+    customer_name = (
+        current_analyzer.name
+        if current_analyzer
+        else current_saju_data.get("meta", {}).get("name", "고객")
+    )
 
-        if not current_saju_data:
-            st.error("사주 연산 데이터가 없습니다. 먼저 고객 정보를 입력해 주세요.")
+    if not current_saju_data:
+      st.error("사주 연산 데이터가 없습니다. 먼저 고객 정보를 입력해 주세요.")
+    else:
+      progress_bar = st.progress(0.0)
+      status_text = st.empty()
+
+      def on_progress(pct, msg):
+        progress_bar.progress(pct)
+        status_text.text(msg)
+
+      try:
+        from saju_pdf_renderer import render_saju_report_pdf
+        from saju_report_generator import generate_saju_report
+
+        with st.spinner(
+            "클로드 소넷 AI가 사주 해설을 작성 중입니다... (약 1분"
+            " 소요)"
+        ):
+          report_md = generate_saju_report(
+              current_saju_data, progress_callback=on_progress
+          )
+          st.session_state.generated_report = report_md
+
+        status_text.text("🎨 PDF 조립 및 렌더링 중...")
+        now = datetime.datetime.now()
+
+        # [1. 고객 전화번호에서 숫자만 추출 - 하이픈/공백 제거]
+        contact_info = current_saju_data.get("contact", {})
+        raw_phone = contact_info.get("phone", "")
+        clean_phone = "".join(c for c in raw_phone if c.isdigit())
+
+        # [2. 파일명을 '이름_전화번호.pdf' 로 지정]
+        if clean_phone:
+          pdf_filename = f"{customer_name}_{clean_phone}.pdf"
         else:
-            progress_bar = st.progress(0.0)
-            status_text = st.empty()
+          pdf_filename = f"{customer_name}{now.strftime('%Y%m%d%H')}.pdf"
 
-            def on_progress(pct, msg):
-                progress_bar.progress(pct)
-                status_text.text(msg)
+        success = render_saju_report_pdf(
+            current_saju_data, report_md, pdf_filename
+        )
 
-            try:
-                from saju_report_generator import generate_saju_report
-                from saju_pdf_renderer import render_saju_report_pdf
+        if success:
+          status_text.text("☁️ 구글 드라이브 날짜별 폴더로 전송 중...")
 
-                with st.spinner("클로드 소넷 AI가 사주 해설을 작성 중입니다... (약 1분 소요)"):
-                    report_md = generate_saju_report(current_saju_data, progress_callback=on_progress)
-                    st.session_state.generated_report = report_md
-
-                status_text.text("🎨 PDF 조립 및 인쇄 중...")
-                pdf_filename = f"{customer_name}_프리미엄_사주해답지.pdf"
-                success = render_saju_report_pdf(current_saju_data, report_md, pdf_filename)
-
-                if success:
-                    st.session_state.generated_pdf = pdf_filename
-                    st.success("🎉 프리미엄 사주 해답지 PDF 생성이 완료되었습니다!")
-                else:
-                    st.error("PDF 렌더링에 실패했습니다. 환경을 확인해 주세요.")
-            except Exception as e:
-                st.error(f"생성 실패: {e}")
-
-    if st.session_state.get('generated_pdf'):
-        pdf_file = st.session_state.generated_pdf
-        if os.path.exists(pdf_file):
-            with open(pdf_file, "rb") as f:
-                pdf_bytes = f.read()
-            st.download_button(
-                label=f"📥 {pdf_file} 다운로드",
-                data=pdf_bytes,
-                file_name=pdf_file,
-                mime="application/pdf",
-                use_container_width=True
+          try:
+            upload_res = gdrive_uploader.upload_pdf_to_date_folder(
+                file_content=pdf_filename,
+                filename=pdf_filename,
+                date_obj=now,
+                contact_info=contact_info,
             )
-            
-    st.subheader("📤 사주 정보 전송")
-    st.caption("사주분석 결과 전체를 구글 드라이브와 n8n 웹훅으로 전송합니다.")
-    root_folder_id = _get_config("GDRIVE_ROOT_FOLDER_ID")
-    webhook_url = _get_config("N8N_WEBHOOK_URL")
-    webhook_secret = _get_config("N8N_WEBHOOK_SECRET")
+          except TypeError:
+            upload_res = gdrive_uploader.upload_pdf_to_date_folder(
+                file_content=pdf_filename,
+                filename=pdf_filename,
+                date_obj=now,
+            )
 
-    birth_str = birth_date.strftime("%Y%m%d") if birth_date else "생년월일미상"
-    if st.button("📤 전송", type="primary", use_container_width=True):
-        if root_folder_id:
-            with st.spinner("구글 드라이브로 백업 저장 중..."):
-                ok, result = gdrive_uploader.upload_saju_data(customer_name, birth_str, saju_data, root_folder_id)
-            if ok:
-                st.success(f"드라이브 백업 완료! [신청인 파일 열기](https://drive.google.com/file/d/{result['customer']}/view)")
-            else:
-                st.error(f"드라이브 백업 실패: {result}")
+          if os.path.exists(pdf_filename):
+            os.remove(pdf_filename)
 
-        if webhook_url and webhook_secret:
-            with st.spinner("n8n으로 전송 중..."):
-                ok2, err2 = gdrive_uploader.send_to_n8n_webhook(customer_name, birth_str, saju_data, webhook_url, webhook_secret)
-            if ok2:
-                st.success("n8n으로 전송 완료!")
-            else:
-                st.error(f"n8n 전송 실패: {err2}")
+          st.success(
+              f"🎉 '{pdf_filename}' 파일이 구글 드라이브에 안전하게"
+              " 저장되었습니다!"
+          )
+          if "webViewLink" in upload_res:
+            st.markdown(
+                "📂 [구글 드라이브에서 파일"
+                f" 확인하기]({upload_res['webViewLink']})"
+            )
+
+          # [3. 구글 드라이브 파일 ID로 3시간 뒤 카카오 알림톡 예약 발송]
+          if clean_phone and "id" in upload_res:
+            try:
+              from saju_alimtalk import schedule_saju_alimtalk_3hours_later
+
+              schedule_saju_alimtalk_3hours_later(
+                  customer_name=customer_name,
+                  phone_number=clean_phone,
+                  file_id=upload_res["id"],
+              )
+              st.info(
+                  "📱 파일 생성 완료! 3시간 뒤 카카오 알림톡 발송 예약이"
+                  " 접수되었습니다."
+              )
+            except Exception as alim_err:
+              st.warning(f"알림톡 예약 안내: {alim_err}")
+        else:
+          st.error("PDF 렌더링에 실패했습니다. 환경을 확인해 주세요.")
+      except Exception as e:
+        st.error(f"생성 및 업로드 실패: {e}")
 
 def render_result_screen():
     analyzer = st.session_state.analyzer
@@ -1166,10 +1222,14 @@ def render_result_screen():
 
     pillars = []
     if analyzer.hour:
-        pillars.append(('시주', analyzer.hour[0], analyzer.hour[1], '시간', '시지'))
-    pillars.append(('일주', analyzer.day[0], analyzer.day[1], None, '일지'))
-    pillars.append(('월주', analyzer.month[0], analyzer.month[1], '월간', '월지'))
-    pillars.append(('년주', analyzer.year[0], analyzer.year[1], '년간', '년지'))
+        h_s, h_b = analyzer.hour
+        pillars.append(('시주', h_s, h_b, '시간', '시지'))
+    d_s, d_b = analyzer.day
+    pillars.append(('일주', d_s, d_b, None, '일지'))
+    m_s, m_b = analyzer.month
+    pillars.append(('월주', m_s, m_b, '월간', '월지'))
+    y_s, y_b = analyzer.year
+    pillars.append(('년주', y_s, y_b, '년간', '년지'))
 
     st.subheader("사주 원국")
     cols = st.columns(len(pillars))
