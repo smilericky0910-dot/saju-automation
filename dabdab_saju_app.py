@@ -45,7 +45,6 @@ MONTH_BRANCHES = ['寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌',
 
 # ============================================================================
 # 출생 도시별 경도 시차 보정표(분 단위) - 표준 경도 135°E(동경 135도) 기준
-# (도시 경도 - 135) / 15 * 60 을 반올림한 값. "시" 단위 도시까지만 지원.
 # ============================================================================
 CITY_LONGITUDE_OFFSETS = {
     "서울특별시": -32, "부산광역시": -24, "대구광역시": -26, "인천광역시": -33,
@@ -72,10 +71,6 @@ CITY_LONGITUDE_OFFSETS = {
     "보정 없음 (표준시 그대로 0분)": 0,
 }
 
-# ============================================================================
-# 납음오행 / 형·해 관계는 SAJU_ENHANCEMENT_ADDITIONS 모듈에서 가져와 사용합니다.
-# (60갑자 전체 매핑 + 정확도 검증은 해당 모듈 참고)
-# ============================================================================
 STEM_INFO = {
     '甲': {'element': '木', 'polarity': '陽', 'name': '갑목(甲木)', 'desc': '하늘로 곧게 뻗은 아름드리 큰 나무로, 진취적이고 책임감이 강한 리더의 기상입니다.'},
     '乙': {'element': '木', 'polarity': '陰', 'name': '을목(乙木)', 'desc': '유연하고 질긴 생명력을 지닌 화초나 넝쿨식물로, 환경 적응력이 뛰어나고 예술적 감각이 돋보입니다.'},
@@ -104,7 +99,6 @@ BRANCH_INFO = {
     '亥': {'element': '水', 'polarity': '陽', 'jijanggan': {'戊': 7, '甲': 7, '壬': 16}, 'k_name': '해수(亥水)', 'animal': '돼지', 'desc': '바다처럼 통찰하고 수렴하는 생명의 기운'}
 }
 
-# [기본 데이터 유지]
 RELATION_MAP = {
     ('木', '木'): '비겁', ('木', '火'): '식상', ('木', '土'): '재성', ('木', '金'): '관성', ('木', '水'): '인성',
     ('火', '火'): '비겁', ('火', '土'): '식상', ('火', '金'): '재성', ('火', '水'): '관성', ('火', '木'): '인성',
@@ -165,16 +159,11 @@ UNSEONG_MAP = {
     '癸': {'卯': '장생', '寅': '목욕', '丑': '관대', '子': '건록', '亥': '제왕', '戌': '쇠', '酉': '병', '申': '사', '未': '묘', '午': '절', '巳': '태', '辰': '양'}
 }
 
-# ============================================================================
-# 기본 함수들 (기존과 동일)
-# ============================================================================
 def get_julian_day_tz(year, month, day, hour=12, minute=0, timezone_offset_hours=9.0):
     local_dt = datetime.datetime(year, month, day, hour, minute)
     utc_dt = local_dt - datetime.timedelta(hours=timezone_offset_hours)
-    
     y, m, d = utc_dt.year, utc_dt.month, utc_dt.day
     h, mn = utc_dt.hour, utc_dt.minute
-    
     if m <= 2:
         y -= 1
         m += 12
@@ -189,34 +178,24 @@ def get_solar_longitude(jd):
     L0 = 280.46646 + 36000.76983 * T + 0.0003032 * T * T
     M = 357.52911 + 35999.05029 * T - 0.0001537 * T * T
     M_rad = math.radians(M % 360.0)
-    
     C = (1.914602 - 0.004817 * T - 0.000014 * T * T) * math.sin(M_rad) + \
         (0.019993 - 0.000101 * T) * math.sin(2 * M_rad) + \
         0.000289 * math.sin(3 * M_rad)
-        
-    true_lon = (L0 + C) % 360.0
-    return true_lon
+    return (L0 + C) % 360.0
 
 def get_equation_of_time_minutes(jd):
-    """
-    균시차(均時差, Equation of Time) - 평균태양시와 진태양시의 차이를 분 단위로 반환.
-    진태양시 = 평균태양시(경도 보정 시각) + 이 값.
-    Meeus, 'Astronomical Algorithms' 28장의 근사식 (오차 수 초 이내).
-    """
     T = (jd - 2451545.0) / 36525.0
     L0 = math.radians((280.46646 + 36000.76983 * T + 0.0003032 * T * T) % 360.0)
     M = math.radians((357.52911 + 35999.05029 * T - 0.0001537 * T * T) % 360.0)
     e = 0.016708634 - 0.000042037 * T - 0.0000001267 * T * T
     eps = math.radians(23.439291 - 0.0130042 * T - 0.00000016 * T * T)
     y = math.tan(eps / 2.0) ** 2
-
     E = (y * math.sin(2 * L0)
          - 2 * e * math.sin(M)
          + 4 * e * y * math.sin(M) * math.cos(2 * L0)
          - 0.5 * y * y * math.sin(4 * L0)
          - 1.25 * e * e * math.sin(2 * M))
-
-    return math.degrees(E) * 4.0  # 1도 = 4분(시간)
+    return math.degrees(E) * 4.0
 
 SOLAR_TERMS_CONFIG = {
     315: (2, 4), 330: (2, 19), 345: (3, 5), 0: (3, 20), 15: (4, 5), 30: (4, 20),
@@ -228,10 +207,8 @@ SOLAR_TERMS_CONFIG = {
 def find_solar_term_time(year, target_longitude):
     month, day = SOLAR_TERMS_CONFIG[target_longitude]
     start_jd = get_julian_day_tz(year, month, day, 12, 0, 9.0)
-    
     low = start_jd - 4.0
     high = start_jd + 4.0
-    
     for _ in range(50):
         mid = (low + high) / 2.0
         lon = get_solar_longitude(mid)
@@ -240,7 +217,6 @@ def find_solar_term_time(year, target_longitude):
             low = mid
         else:
             high = mid
-            
     return (low + high) / 2.0
 
 def get_dst_offset_minutes(year, month, day, hour, minute):
@@ -264,18 +240,11 @@ def get_dst_offset_minutes(year, month, day, hour, minute):
 def determine_ten_deity(me_stem, target_char, is_branch=False):
     me_elem = STEM_INFO[me_stem]['element']
     me_pol = STEM_INFO[me_stem]['polarity']
-    
-    if is_branch:
-        target_info = BRANCH_INFO[target_char]
-    else:
-        target_info = STEM_INFO[target_char]
-        
+    target_info = BRANCH_INFO[target_char] if is_branch else STEM_INFO[target_char]
     target_elem = target_info['element']
     target_pol = target_info['polarity']
-    
     relation = RELATION_MAP[(me_elem, target_elem)]
     same_polarity = (me_pol == target_pol)
-    
     if relation == '비겁':
         return '비견' if same_polarity else '겁재'
     elif relation == '식상':
@@ -286,7 +255,6 @@ def determine_ten_deity(me_stem, target_char, is_branch=False):
         return '편관' if same_polarity else '정관'
     elif relation == '인성':
         return '편인' if same_polarity else '정인'
-    
     return '미상'
 
 def get_sinsal(base_branch, target_branch):
@@ -298,21 +266,11 @@ def get_sinsal(base_branch, target_branch):
         start_idx = 2
     else:
         start_idx = 11
-        
     target_idx = BRANCHES_LIST.index(target_branch)
     sinsal_list = ['지살', '년살', '월살', '망신살', '장성살', '반안살', '역마살', '육해살', '화개살', '겁살', '재살', '천살']
-    idx = (target_idx - start_idx) % 12
-    return sinsal_list[idx]
+    return sinsal_list[(target_idx - start_idx) % 12]
 
 def get_historical_kst_correction_minutes(year, month, day):
-    """
-    한국 표준시(KST)는 시대에 따라 여러 차례 바뀌었다. 이 프로그램의 모든 계산은
-    현재 표준시(UTC+9)를 기준으로 하므로, 다른 표준시를 쓰던 시대에 태어난 사람은
-    시계가 실제로 가리키던 시각을 UTC+9 기준으로 환산해주는 보정이 필요하다.
-      - 1908-04-01 ~ 1911-12-31: 대한제국 표준시 UTC+8:30 (현재보다 30분 느림)
-      - 1954-03-21 ~ 1961-08-09: 대한민국 표준시 UTC+8:30 (현재보다 30분 느림)
-      - 그 외 기간(1912~1954, 1961~현재): 지금과 같은 UTC+9 → 보정 없음
-    """
     dt = datetime.date(year, month, day)
     if datetime.date(1908, 4, 1) <= dt <= datetime.date(1911, 12, 31):
         return 30
@@ -324,22 +282,15 @@ def convert_to_pillars(year, month, day, hour=None, minute=0, is_lunar=False, is
     solar_year, solar_month, solar_day = year, month, day
     if is_lunar:
         if not LUNAR_CALENDAR_AVAILABLE:
-            raise RuntimeError(
-                "음력 변환에 필요한 'korean_lunar_calendar' 패키지가 설치되어 있지 않습니다. "
-                "'pip install korean_lunar_calendar'로 설치한 뒤 다시 시도해주세요."
-            )
+            raise RuntimeError("음력 변환에 필요한 'korean_lunar_calendar' 패키지가 설치되어 있지 않습니다.")
         lunar_conv = KoreanLunarCalendar()
         try:
             lunar_conv.setLunarDate(year, month, day, is_leap)
         except Exception as e:
-            raise ValueError(f"입력하신 음력 날짜({year}-{month}-{day}, 윤달={is_leap})가 유효하지 않습니다: {e}")
+            raise ValueError(f"입력하신 음력 날짜({year}-{month}-{day})가 유효하지 않습니다: {e}")
         solar_year, solar_month, solar_day = lunar_conv.solarYear, lunar_conv.solarMonth, lunar_conv.solarDay
 
     h_val = hour if hour is not None else 12
-
-    # 서머타임 기간에는 시계가 표준시(KST)보다 1시간 앞서 있고, 1954~1961년 등 과거 한국
-    # 표준시가 UTC+8:30이던 시기는 지금(UTC+9)보다 시계가 30분 느리므로, 절기 판정(연주/
-    # 월주/대운)에 쓰이는 birth_jd는 이 두 보정을 모두 반영한 '현재 기준 표준시'로 계산해야 한다.
     historical_kst_correction_mins = get_historical_kst_correction_minutes(solar_year, solar_month, solar_day)
     _civil_dt = datetime.datetime(solar_year, solar_month, solar_day, h_val, minute)
     _std_kst_dt = _civil_dt - datetime.timedelta(minutes=dst_offset_mins) + datetime.timedelta(minutes=historical_kst_correction_mins)
@@ -357,13 +308,10 @@ def convert_to_pillars(year, month, day, hour=None, minute=0, is_lunar=False, is
     jeolgi_longitudes = [315, 345, 15, 45, 75, 105, 135, 165, 195, 225, 255, 285]
     jeolgi_jds = []
     for lon in jeolgi_longitudes:
-        # 285도(소한)는 입춘 기준 saju_year의 "다음 해" 1월에 오는 절기이므로 saju_year+1로 계산해야
-        # jeolgi_jds가 시간순으로 단조 증가한다 (대설(255) 이후에 와야 함).
         term_year = saju_year + 1 if lon == 285 else saju_year
         jeolgi_jds.append(find_solar_term_time(term_year, lon))
 
     next_ipchun_jd = find_solar_term_time(saju_year + 1, 315)
-    
     month_idx = -1
     if birth_jd < jeolgi_jds[0]: 
         month_idx = 11 
@@ -372,9 +320,8 @@ def convert_to_pillars(year, month, day, hour=None, minute=0, is_lunar=False, is
             if jeolgi_jds[m] <= birth_jd < jeolgi_jds[m+1]:
                 month_idx = m
                 break
-        if month_idx == -1:
-            if jeolgi_jds[11] <= birth_jd < next_ipchun_jd:
-                month_idx = 11
+        if month_idx == -1 and jeolgi_jds[11] <= birth_jd < next_ipchun_jd:
+            month_idx = 11
                 
     year_stem_idx = year_diff % 10
     month_base_stem_idx = (year_stem_idx % 5 * 2 + 2) % 10
@@ -383,16 +330,12 @@ def convert_to_pillars(year, month, day, hour=None, minute=0, is_lunar=False, is
     month_branch = MONTH_BRANCHES[month_idx]
     
     standard_dt = datetime.datetime(solar_year, solar_month, solar_day, h_val, minute)
-    # 진태양시(眞太陽時) = 표준시 - 서머타임 + 과거 표준시 보정 + 경도 시차 + 균시차
     eot_minutes = get_equation_of_time_minutes(birth_jd)
     total_offset_mins = region_offset_mins - dst_offset_mins + historical_kst_correction_mins + eot_minutes
     lst_dt = standard_dt + datetime.timedelta(minutes=total_offset_mins)
     
-    lst_year = lst_dt.year
-    lst_month = lst_dt.month
-    lst_day = lst_dt.day
-    lst_hour = lst_dt.hour
-    lst_minute = lst_dt.minute
+    lst_year, lst_month, lst_day = lst_dt.year, lst_dt.month, lst_dt.day
+    lst_hour, lst_minute = lst_dt.hour, lst_dt.minute
     
     base_date = datetime.date(1950, 1, 1)
     birth_date_lst = datetime.date(lst_year, lst_month, lst_day)
@@ -400,10 +343,7 @@ def convert_to_pillars(year, month, day, hour=None, minute=0, is_lunar=False, is
     is_next_day = False
     tot_min_lst = lst_hour * 60 + lst_minute
     if hour is not None:
-        if time_boundary == "선택 안 함(기본)":
-            if tot_min_lst >= 1380:
-                is_next_day = True
-        elif time_boundary == "조자시 적용 (00:00~00:30)":
+        if time_boundary in ["선택 안 함(기본)", "조자시 적용 (00:00~00:30)"]:
             if tot_min_lst >= 1380:
                 is_next_day = True
         elif time_boundary == "야자시 적용 (23:30~24:00)":
@@ -420,30 +360,18 @@ def convert_to_pillars(year, month, day, hour=None, minute=0, is_lunar=False, is
     if hour is None:
         hour_p = None
     else:
-        if tot_min_lst >= 1380 or tot_min_lst < 60:
-            h_idx = 0  
-        elif tot_min_lst < 180:
-            h_idx = 1  
-        elif tot_min_lst < 300:
-            h_idx = 2  
-        elif tot_min_lst < 420:
-            h_idx = 3  
-        elif tot_min_lst < 540:
-            h_idx = 4  
-        elif tot_min_lst < 660:
-            h_idx = 5  
-        elif tot_min_lst < 780:
-            h_idx = 6  
-        elif tot_min_lst < 900:
-            h_idx = 7  
-        elif tot_min_lst < 1020:
-            h_idx = 8  
-        elif tot_min_lst < 1140:
-            h_idx = 9  
-        elif tot_min_lst < 1260:
-            h_idx = 10 
-        else:
-            h_idx = 11 
+        if tot_min_lst >= 1380 or tot_min_lst < 60: h_idx = 0  
+        elif tot_min_lst < 180: h_idx = 1  
+        elif tot_min_lst < 300: h_idx = 2  
+        elif tot_min_lst < 420: h_idx = 3  
+        elif tot_min_lst < 540: h_idx = 4  
+        elif tot_min_lst < 660: h_idx = 5  
+        elif tot_min_lst < 780: h_idx = 6  
+        elif tot_min_lst < 900: h_idx = 7  
+        elif tot_min_lst < 1020: h_idx = 8  
+        elif tot_min_lst < 1140: h_idx = 9  
+        elif tot_min_lst < 1260: h_idx = 10 
+        else: h_idx = 11 
             
         day_stem_idx = day_idx % 10
         hour_base_stem_idx = (day_stem_idx % 5 * 2) % 10
@@ -475,7 +403,6 @@ def convert_to_pillars(year, month, day, hour=None, minute=0, is_lunar=False, is
         jd_diff = birth_jd - prev_term_jd
         
     daewoon_num = max(1, round(jd_diff / 3.0)) 
-    
     daewoon_pillars = []
     month_pillar_idx = GANJI_60.index(month_stem + month_branch)
     for i in range(1, 11):
@@ -486,19 +413,10 @@ def convert_to_pillars(year, month, day, hour=None, minute=0, is_lunar=False, is
         
     return (year_stem, year_branch), (month_stem, month_branch), (day_stem, day_branch), hour_p, daewoon_num, daewoon_pillars, is_forward, lst_dt
 
-# ============================================================================
-# 납음오행 / 형·해 / 격국 / 공망 / 월령 / 배우자운·재운·직업운 함수는
-# SAJU_ENHANCEMENT_ADDITIONS 모듈에서 import 하여 사용합니다 (상단 import 참고).
-# ============================================================================
-
 def get_year_ganji(year):
-    """연도(서기) → 세운(歲運)에 쓰이는 그 해의 년주(年柱) 간지"""
     year_diff = year - 4
     return STEMS_LIST[year_diff % 10], BRANCHES_LIST[year_diff % 12]
 
-# ============================================================================
-# 격국(格局) 판별 - 월지(月支) 지장간의 정기(正氣) 기준 (정통 방식)
-# ============================================================================
 _GUCKGUK_BY_SIPSIN = {
     '식신': ('식신격(食神格)', '식신이 월지 정기에 드러나 표현력과 창의력, 여유로움이 돋보이는 귀한 격국입니다.'),
     '상관': ('상관격(傷官格)', '상관이 월지 정기에 드러나 재능과 자유로운 기질이 두드러지는 격국. 조직생활보다 전문성이 유리합니다.'),
@@ -510,12 +428,7 @@ _GUCKGUK_BY_SIPSIN = {
     '정인': ('정인격(正印格)', '정인이 월지 정기에 자리한 귀한 격국. 학문과 명예를 중시하며 문서·교육운이 좋습니다.'),
 }
 
-
 def determine_guckguk_by_wolji(day_master, month_branch):
-    """
-    격국(格局) 판별 - 월지(月支) 지장간 중 정기(正氣, 배정 일수가 가장 큰 지장간)를
-    기준으로 판별하는 정통 방식. (기존의 월간 십신 기준 간이 방식보다 정확함)
-    """
     jijanggan = BRANCH_INFO[month_branch]['jijanggan']
     jeonggi_stem = max(jijanggan.items(), key=lambda x: x[1])[0]
     sipsin = determine_ten_deity(day_master, jeonggi_stem, is_branch=False)
@@ -524,7 +437,6 @@ def determine_guckguk_by_wolji(day_master, month_branch):
         name, desc = _GUCKGUK_BY_SIPSIN[sipsin]
         return {'name': name, 'desc': desc, 'jeonggi_stem': jeonggi_stem, 'sipsin': sipsin}
 
-    # 비견/겁재는 격의 대상신으로 삼지 않는 것이 정석이라 건록격/양인격/월겁격으로 별도 처리
     is_yang_stem = STEM_INFO[day_master]['polarity'] == '陽'
     if sipsin == '비견':
         return {
@@ -544,10 +456,6 @@ def determine_guckguk_by_wolji(day_master, month_branch):
         'jeonggi_stem': jeonggi_stem, 'sipsin': sipsin,
     }
 
-# ============================================================================
-# [IMPORTANT] 향상된 AdvancedSajuAnalyzer 클래스
-# ============================================================================
-
 class AdvancedSajuAnalyzer:
     def __init__(self, name, sex, year_pillar, month_pillar, day_pillar, hour_pillar, daewoon_num, daewoon_pillars, birth_date=None, profile=None, compatibility=None):
         self.name = name
@@ -559,13 +467,9 @@ class AdvancedSajuAnalyzer:
         self.daewoon_num = daewoon_num
         self.birth_date = birth_date
         self.daewoon_pillars = daewoon_pillars
-        # 고객이 선택 입력한 혼인상태/자녀유무/직업상태/심층질문 (없으면 값이 None) —
-        # 풀이 엔진이 서술 깊이·심층 질문 답변 여부를 판단하는 데만 쓰고, 계산에는 관여하지 않는다.
         self.profile = profile or {}
         self.compatibility = compatibility or {'requested': False}
-        
         self.day_master = day_pillar[0]
-        
         self.stems = [self.year[0], self.month[0], self.day[0]]
         self.branches = [self.year[1], self.month[1], self.day[1]]
         if self.hour:
@@ -582,7 +486,6 @@ class AdvancedSajuAnalyzer:
             weight = 30.0 if idx == 1 else 10.0  
             jijanggan = BRANCH_INFO[branch]['jijanggan']
             total_days = sum(jijanggan.values())
-            
             for stem_char, days in jijanggan.items():
                 elem = STEM_INFO[stem_char]['element']
                 distributed_score = weight * (days / total_days)
@@ -590,7 +493,6 @@ class AdvancedSajuAnalyzer:
                 
         for k in scores:
             scores[k] = round(scores[k], 2)
-            
         return scores
 
     def detect_combinations_and_clashes(self):
@@ -600,7 +502,7 @@ class AdvancedSajuAnalyzer:
             'branch_half_comb': [],
             'branch_six_comb': [],
             'branch_clashes': [],
-            'xing_hae': []  # NEW
+            'xing_hae': []
         }
         
         adjacent_stem_pairs = [('년간-월간', self.stems[0], self.stems[1]), ('월간-일간', self.stems[1], self.stems[2])]
@@ -616,7 +518,6 @@ class AdvancedSajuAnalyzer:
                 })
                 
         branches_set = set(self.branches)
-        
         for comb_set, info in BRANCH_THREE_COMBINATIONS.items():
             if comb_set.issubset(branches_set):
                 results['branch_three_comb'].append({
@@ -641,7 +542,6 @@ class AdvancedSajuAnalyzer:
                     'pair': (b1, b2), 'position': name, 'target_element': target, 'desc': f"{name} {b1}·{b2} 육합{target}"
                 })
             
-            # NEW: 형/해 관계 추가
             xing_hae = check_xing_hae(b1, b2)
             if xing_hae['exists']:
                 results['xing_hae'].append({
@@ -655,13 +555,11 @@ class AdvancedSajuAnalyzer:
                 results['branch_clashes'].append({
                     'pair': (b1, b2), 'position': name, 'desc': f"{name} {clash_name} (강한 인접 충)"
                 })
-                
         return results
 
     def calculate_adjusted_element_scores(self, raw_scores, comb_results):
         adjusted = raw_scores.copy()
         shifts = []
-        
         for comb in comb_results['branch_three_comb']:
             target_elem = comb['target_element']
             desc = comb['name']
@@ -701,31 +599,24 @@ class AdvancedSajuAnalyzer:
 
         for k in adjusted:
             adjusted[k] = max(0.0, round(adjusted[k], 2))
-            
         return adjusted, shifts
 
     def analyze_strength(self, scores):
         me_elem = STEM_INFO[self.day_master]['element']
         helpers = [me_elem]
         for other_elem in ['木', '火', '土', '金', '水']:
-            if other_elem != me_elem:
-                if RELATION_MAP.get((me_elem, other_elem)) == '인성':
-                    helpers.append(other_elem)
+            if other_elem != me_elem and RELATION_MAP.get((me_elem, other_elem)) == '인성':
+                helpers.append(other_elem)
 
-        # 월령(月令) 왕상휴수사 반영: 태어난 계절에 따라 오행별 실질 힘을 가중치로 보정
         season_info = get_season_multipliers(self.month[1])
         weighted_scores = {elem: scores[elem] * season_info['multipliers'][elem] for elem in scores}
-
         total_score = sum(weighted_scores.values())
         helper_score = sum(weighted_scores[elem] for elem in helpers)
         helper_ratio = (helper_score / total_score) * 100 if total_score > 0 else 0
 
-        if helper_ratio >= 45:
-            strength = "신강(身强)"
-        elif helper_ratio >= 35:
-            strength = "중화(中和)"
-        else:
-            strength = "신약(身弱)"
+        if helper_ratio >= 45: strength = "신강(身强)"
+        elif helper_ratio >= 35: strength = "중화(中和)"
+        else: strength = "신약(身弱)"
 
         return {
             'strength': strength,
@@ -736,34 +627,21 @@ class AdvancedSajuAnalyzer:
         }
 
     def determine_yongshin(self, adj_scores, strength_info):
-        """억부용신(抑扶用神) - 신강/신약을 기준으로 한 용신 판정. 오행 한 글자를 반환."""
         me_elem = STEM_INFO[self.day_master]['element']
         helpers = strength_info['helper_elements']
-
         if strength_info['strength'] == "신약(身弱)":
             other_helpers = [h for h in helpers if h != me_elem]
             if other_helpers:
-                if adj_scores[me_elem] > 0:
-                    return me_elem
-                else:
-                    return other_helpers[0]
+                return me_elem if adj_scores[me_elem] > 0 else other_helpers[0]
             return me_elem
         else:
             opponents = [e for e in ['木', '火', '土', '金', '水'] if e not in helpers]
-            if opponents:
-                return max(opponents, key=lambda x: adj_scores[x])
-            return "土"
+            return max(opponents, key=lambda x: adj_scores[x]) if opponents else "土"
 
     def compute_all(self):
-        """
-        사주 분석에 필요한 모든 계산을 한 번에 수행해서 구조화된 dict로 반환한다.
-        generate_detailed_report()(텍스트 리포트)와 카드형 화면 렌더러가 이 dict 하나를
-        공유해서 쓰므로, 계산 로직은 여기 한 곳에만 있으면 된다.
-        """
         raw_scores = self.calculate_raw_element_scores()
         comb_results = self.detect_combinations_and_clashes()
         adj_scores, shift_logs = self.calculate_adjusted_element_scores(raw_scores, comb_results)
-
         raw_strength = self.analyze_strength(raw_scores)
         adj_strength = self.analyze_strength(adj_scores)
 
@@ -801,10 +679,7 @@ class AdvancedSajuAnalyzer:
             if is_branch:
                 unseong_val = UNSEONG_MAP[self.day_master].get(char, "-")
                 unseong_list.append(unseong_val)
-                if idx == 1:
-                    sinsal_val = get_sinsal(self.branches[2], char)
-                else:
-                    sinsal_val = get_sinsal(self.branches[0], char)
+                sinsal_val = get_sinsal(self.branches[2] if idx == 1 else self.branches[0], char)
                 sinsal_list.append(sinsal_val)
                 jijanggan_list.append(''.join(BRANCH_INFO[char]['jijanggan'].keys()))
             else:
@@ -812,28 +687,18 @@ class AdvancedSajuAnalyzer:
                 sinsal_list.append("-")
                 jijanggan_list.append("-")
 
-        # 격국 판별 (월지 지장간 정기 기준 - 정통 방식)
         month_deity = deities.get('월간', '')
         guckguk_info = determine_guckguk_by_wolji(self.day_master, self.month[1])
-
-        # 배우자운/재운/직업운 - 계산은 항상 해두되(추후 사주풀이 단계에서 사용),
-        # "사주 정보" 카드 화면에는 노출하지 않는다.
         marriage_info = analyze_marriage_luck(month_deity, adj_scores, self.sex)
         wealth_info = analyze_wealth_luck(self.day_master, adj_scores, adj_strength['strength'])
         career_info = analyze_career_luck(self.day_master, adj_scores)
 
-        # 납음오행 (년주 기준, 60갑자 전체 지원)
         year_ganji = self.year[0] + self.year[1]
         naeum_info = get_naeum_ohaeng(year_ganji)
-
-        # 공망(空亡) - 일주 기준으로 원국/대운에 걸리는 공망 지지를 함께 판정
         gongmang_info = calculate_gongmang(self.day[0], self.day[1])
         gongmang_branches = gongmang_info['branches']
-
-        # 월령(月令) 득령/실령 - 일간의 월지 12운성을 기준으로 판정
         deukryeong_info = classify_deukryeong(UNSEONG_MAP[self.day_master].get(self.month[1], '-'))
 
-        # 주요 신살(神殺) - 도화살/양인살/괴강살/천을귀인/문창귀인/원진살
         dohwasal_info = check_dohwasal(self.day[1], self.branches)
         yanginsal_info = check_yanginsal(self.day_master, UNSEONG_MAP, self.branches)
         goegangsal_info = check_goegangsal(self.day[0] + self.day[1])
@@ -841,13 +706,10 @@ class AdvancedSajuAnalyzer:
         munchang_info = check_munchang_gwiin(self.day_master, self.branches)
         wonjinsal_list = check_wonjinsal(self.branches)
 
-        # 세운(歲運) - 생년월일이 있을 때만 (현재 대운 + 향후 5년 유년운)
         saeyun = None
         if self.birth_date is not None:
             today = datetime.date.today()
-            birth_year = self.birth_date.year
-            current_age = today.year - birth_year + 1  # 세는나이 기준
-
+            current_age = today.year - self.birth_date.year + 1
             current_daewoon = None
             for age, stem, branch in self.daewoon_pillars:
                 if age <= current_age < age + 10:
@@ -873,7 +735,6 @@ class AdvancedSajuAnalyzer:
                 'years': years,
             }
 
-        # 대운 전체 (나이/간지/십신/12운성/공망 여부까지 - saeyun의 'years'와 같은 형태)
         daewoon_full = []
         for age, stem, branch in self.daewoon_pillars:
             daewoon_full.append({
@@ -885,8 +746,6 @@ class AdvancedSajuAnalyzer:
             })
 
         return {
-            # 이 dict 하나만으로 완결되도록 고객 기본정보 + 원국 간지도 함께 담는다
-            # (풀이 단계에서 analyzer 객체 없이 이 JSON만 보고도 전부 알 수 있어야 하므로)
             'meta': {
                 'name': self.name, 'sex': self.sex,
                 'birth_date': self.birth_date.isoformat() if self.birth_date else None,
@@ -894,8 +753,6 @@ class AdvancedSajuAnalyzer:
                 'saju_type': "사주팔자(四柱八字)" if self.hour else "사주삼주(三柱 - 시간모름)",
                 'day_master': self.day_master,
             },
-            # 고객이 선택 입력한 프로필 (없는 값은 null) — 풀이 단계에서 챕터별 서술 범위
-            # 조정 및 심층 질문 답변 여부 판단에 사용
             'profile': {
                 'marital_status': self.profile.get('marital_status'),
                 'has_children': self.profile.get('has_children'),
@@ -928,222 +785,20 @@ class AdvancedSajuAnalyzer:
 
     def generate_detailed_report(self):
         d = self.compute_all()
-        raw_scores, adj_scores, shift_logs = d['raw_scores'], d['adj_scores'], d['shift_logs']
-        comb_results = d['comb_results']
-        raw_strength, adj_strength = d['raw_strength'], d['adj_strength']
-        eokbu_elem, johu_info, tonggwan_info = d['eokbu_elem'], d['johu_info'], d['tonggwan_info']
-        positions, deities = d['positions'], d['deities']
-        unseong_list, sinsal_list = d['unseong_list'], d['sinsal_list']
-        guckguk_info = d['guckguk_info']
-        marriage_info, wealth_info, career_info = d['life_areas']['marriage'], d['life_areas']['wealth'], d['life_areas']['career']
-        year_ganji, naeum_info = d['year_ganji'], d['naeum_info']
-        gongmang_info, gongmang_branches = d['gongmang_info'], d['gongmang_branches']
-        deukryeong_info = d['deukryeong_info']
-        dohwasal_info, yanginsal_info, goegangsal_info = d['sinsal']['dohwa'], d['sinsal']['yangin'], d['sinsal']['goegang']
-        cheoneul_info, munchang_info, wonjinsal_list = d['sinsal']['cheoneul'], d['sinsal']['munchang'], d['sinsal']['wonjin']
-
-        report = []
-        report.append("=" * 80)
-        report.append(f"      [ {self.name} 님 정밀 사주명리 분석 자동화 V8 리포트 ]")
-        report.append("=" * 80)
-        saju_type = "사주팔자(四柱八字)" if self.hour else "사주삼주(三柱六字 - 시간모름)"
-        report.append(f"■ 성별 구별: {self.sex} 명식")
-        report.append(f"■ 연산 형식: {saju_type}")
-        hour_p_str = f"{self.hour[0]}{self.hour[1]}" if self.hour else "시간모름"
-        report.append(f"■ 대상 명식: 년주({self.year[0]}{self.year[1]}) 월주({self.month[0]}{self.month[1]}) 일주({self.day[0]}{self.day[1]}) 시주({hour_p_str})")
-        report.append(f"■ 일간 기질: 본인을 나타내는 기운은 {self.day_master}({STEM_INFO[self.day_master]['name']}) 기운입니다.")
-        report.append("-" * 80)
-        
-        report.append("1. 십신(육친) 매핑 및 신살/운성 지표")
-        for idx, pos in enumerate(positions):
-            char_str = deities[pos]
-            uns_str = f" | 12운성: {unseong_list[idx]}" if unseong_list[idx] != "-" else ""
-            sin_str = f" | 12신살: {sinsal_list[idx]}" if sinsal_list[idx] != "-" else ""
-            report.append(f"  - {pos}: {char_str}{uns_str}{sin_str}")
-        report.append("-" * 80)
-        
-        # NEW: 납음오행 추가
-        report.append(f"2. 납음오행(納音五行) 분석")
-        report.append(f"  - 년주 {year_ganji}: {naeum_info['name']} ({naeum_info['desc']})")
-        report.append("-" * 80)
-        
-        report.append(f"3. 격국(格局) 판별")
-        report.append(f"  - 격국: {guckguk_info['name']}")
-        report.append(f"  - 판별 근거: 월지({self.month[1]}) 지장간 중 정기(正氣) {guckguk_info['jeonggi_stem']} → 일간 기준 {guckguk_info['sipsin']}")
-        report.append(f"  - 특징: {guckguk_info['desc']}")
-        report.append("-" * 80)
-        
-        report.append(f"4. 형(形) / 해(害) 분석")
-        if comb_results['xing_hae']:
-            for xh in comb_results['xing_hae']:
-                report.append(f"  - {xh['desc']}")
-        else:
-            report.append(f"  - 원국 내 형/해 관계가 없습니다.")
-        report.append("-" * 80)
-
-        report.append("5. 공망(空亡) 분석")
-        report.append(f"  - {gongmang_info['desc']}")
-        own_branches = {'년지': self.year[1], '월지': self.month[1], '일지': self.day[1]}
-        if self.hour:
-            own_branches['시지'] = self.hour[1]
-        hit_positions = [pos for pos, b in own_branches.items() if b in gongmang_branches]
-        if hit_positions:
-            report.append(f"  - 원국 내 공망 해당: {', '.join(hit_positions)}이(가) 공망 지지({'·'.join(gongmang_branches)})에 해당합니다.")
-        else:
-            report.append("  - 원국의 년지/월지/일지" + ("/시지" if self.hour else "") + "에는 공망이 걸리지 않았습니다.")
-        report.append("-" * 80)
-
-        report.append(f"6. 대운수 및 대운 흐름 (대운수: {self.daewoon_num})")
-        for age, stem, branch in self.daewoon_pillars:
-            d_deity_s = determine_ten_deity(self.day_master, stem, False)
-            d_deity_b = determine_ten_deity(self.day_master, branch, True)
-            d_uns = UNSEONG_MAP[self.day_master].get(branch, "-")
-            gm_tag = " [공망]" if branch in gongmang_branches else ""
-            report.append(f"  - {age:2d}세 대운: {stem}{branch} ({d_deity_s}/{d_deity_b} | {d_uns}){gm_tag}")
-        report.append("-" * 80)
-
-        report.append("7. 용신(用神) 판정 - 억부/조후/통관 교차검증")
-        report.append(f"  [억부용신] {eokbu_elem} — 신강도({adj_strength['strength']})를 기준으로 원국의 균형을 맞추는 주(主) 용신")
-
-        if johu_info['needed']:
-            report.append(f"  [조후용신] {johu_info['element']} — {johu_info['desc']}")
-            if johu_info.get('urgent'):
-                if johu_info['element'] == eokbu_elem:
-                    report.append(f"  → 억부용신과 조후용신이 {eokbu_elem}(으)로 일치합니다. 신뢰도가 높은 용신입니다.")
-                else:
-                    report.append(f"  → 억부상 {eokbu_elem}, 조후상 {johu_info['element']}이(가) 모두 필요합니다. 두 오행을 함께 보완하는 것이 이상적입니다.")
-        else:
-            report.append(f"  [조후용신] {johu_info['desc']}")
-
-        if tonggwan_info['needed']:
-            report.append(f"  [통관용신] {tonggwan_info['element']} — {tonggwan_info['desc']}")
-
-        report.append("-" * 80)
-
-        report.append("8. 원국 내 합(合)과 충(冲) 분석")
-        has_any = False
-        for comb in comb_results['stem_combinations']:
-            report.append(f"  [천간합] {comb['desc']} 성립")
-            has_any = True
-        for comb in comb_results['branch_three_comb']:
-            report.append(f"  [삼 합] {comb['desc']} (강력한 {comb['target_element']} 국 형성)")
-            has_any = True
-        for comb in comb_results['branch_half_comb']:
-            report.append(f"  [반 합] {comb['desc']} ({comb['target_element']} 기운 강화)")
-            has_any = True
-        for comb in comb_results['branch_six_comb']:
-            report.append(f"  [육 합] {comb['desc']}")
-            has_any = True
-            
-        if not has_any:
-            report.append("  - 특이한 원국 내 합/충 작용이 감지되지 않았습니다.")
-        report.append("-" * 80)
-        
-        report.append("9. 지장간 사령 기반 실질 오행 점수")
-        report.append("  [오행]      [순수 원국 점수]      [합화 시프트 반영 최종 점수]")
-        for elem in ['木', '火', '土', '金', '水']:
-            raw_s = raw_scores[elem]
-            adj_s = adj_scores[elem]
-            arrow = "→" if raw_s != adj_s else " "
-            report.append(f"   - {elem} 기운:     {raw_s:5.1f} 점               {arrow}   {adj_s:5.1f} 점 ({adj_s:.1f}%)")
-        report.append("-" * 80)
-
-        if shift_logs:
-            report.append("10. 에너지 합화(합화 시프트) 연산 로그")
-            for log in shift_logs:
-                report.append(f"  * {log}")
-            report.append("-" * 80)
-
-        season_info = adj_strength['season_info']
-        season_line = " ".join(f"{e}({season_info['status_by_element'][e]})" for e in ['木', '火', '土', '金', '水'])
-        report.append("11. 격국 신강도 최종 판정")
-        report.append(f"  [월령 왕상휴수사]: {self.month[1]}월은 {season_info['season_element']}이(가) 왕성한 절기 → {season_line}")
-        report.append(f"  [합화 전 순수 원국 신강도]: {raw_strength['strength']} (월령 가중 반영 비율: {raw_strength['helper_ratio']:.1f}%)")
-        report.append(f"  [합화 반영 최종 실질 신강도]: {adj_strength['strength']} (월령 가중 반영 비율: {adj_strength['helper_ratio']:.1f}%)")
-        report.append(f"  [월령(月令) 득실]: {deukryeong_info['status']} - {deukryeong_info['desc']}")
-        report.append("-" * 80)
-
-        report.append("12. 본질적 기질 및 성격 상세 분석")
-        day_master_info = STEM_INFO[self.day_master]
-        day_branch_info = BRANCH_INFO[self.day[1]]
-        report.append(f"  - [일간(日干) 본질 기질 - {day_master_info['name']}]")
-        report.append(f"    {day_master_info['desc']}")
-        report.append(f"  - [일지(日支) 행동 및 무의식 성향 - {day_branch_info['k_name']}]")
-        report.append(f"    지지에서는 동물 [{day_branch_info['animal']}]의 성향을 나타내며, {day_branch_info['desc']}")
-        report.append("-" * 80)
-
-        report.append("13. 배우자운(婚運) 분석 ✨")
-        report.append(f"  - 배우자 기운: {marriage_info['type']}")
-        report.append(f"  - 안정도: {marriage_info['strength']}")
-        report.append(f"  - 설명: {marriage_info['desc']}")
-        report.append(f"  - 배우자 유형: {marriage_info['partner_desc']}")
-        report.append("-" * 80)
-
-        report.append("14. 재운(財運) 분석 💰")
-        report.append(f"  - 재성 점수: {wealth_info['score']:.1f}")
-        report.append(f"  - 수준: {wealth_info['level']}")
-        report.append(f"  - 분석: {wealth_info['desc']}")
-        report.append("-" * 80)
-        
-        report.append("15. 직업운(職業運) 분석 🏢")
-        report.append(f"  - 주도 오행: {career_info['elem']}")
-        report.append(f"  - 강도: {career_info['strength']}")
-        report.append(f"  - 적성 직업: {', '.join(career_info['suitable_jobs'])}")
-        report.append(f"  - 분석: {career_info['desc']}")
-        report.append("-" * 80)
-
-        report.append("16. 주요 신살(神殺) 종합 ✨")
-        if dohwasal_info['exists']:
-            report.append(f"  - [도화살(桃花殺)] 있음 — {dohwasal_info['desc']}")
-        else:
-            report.append(f"  - [도화살(桃花殺)] 없음 — {dohwasal_info['desc']}")
-        if yanginsal_info['exists']:
-            report.append(f"  - [양인살(陽刃殺)] 있음 — {yanginsal_info['desc']}")
-        else:
-            report.append(f"  - [양인살(陽刃殺)] 없음 — {yanginsal_info['desc']}")
-        if goegangsal_info['exists']:
-            report.append(f"  - [괴강살(魁罡殺)] 있음 — {goegangsal_info['desc']}")
-        if cheoneul_info['exists']:
-            report.append(f"  - [천을귀인(天乙貴人)] 있음 — {cheoneul_info['desc']}")
-        else:
-            report.append(f"  - [천을귀인(天乙貴人)] 없음 — {cheoneul_info['desc']}")
-        if munchang_info['exists']:
-            report.append(f"  - [문창귀인(文昌貴人)] 있음 — {munchang_info['desc']}")
-        else:
-            report.append(f"  - [문창귀인(文昌貴人)] 없음 — {munchang_info['desc']}")
-        for w in wonjinsal_list:
-            report.append(f"  - [원진살(怨嗔殺) - {w['name']}] 있음 — {w['desc']}")
-        if not wonjinsal_list:
-            report.append("  - [원진살(怨嗔殺)] 없음 — 원국 지지 간 원진 관계가 없습니다.")
-        report.append("=" * 80)
-
-        sy = d['saeyun']
-        if sy is not None:
-            report.append("17. 세운(歲運) 흐름 - 현재 대운 및 향후 5년 유년운")
-
-            if sy['before_first_daewoon']:
-                report.append(f"  - 현재 만 나이(세는나이 {sy['current_age']}세) 기준, 아직 첫 대운(대운수 {self.daewoon_num}) 이전입니다.")
-            elif sy['current_daewoon']:
-                age, stem, branch = sy['current_daewoon']
-                d_deity_s = determine_ten_deity(self.day_master, stem, False)
-                d_deity_b = determine_ten_deity(self.day_master, branch, True)
-                gm_tag = " [공망]" if branch in gongmang_branches else ""
-                report.append(f"  - 현재 대운(세는나이 {sy['current_age']}세): {stem}{branch} ({age}세~{age+9}세, {d_deity_s}/{d_deity_b}){gm_tag}")
-
-            for y in sy['years']:
-                gm_tag = " [공망]" if y['gongmang'] else ""
-                label = "올해" if y['offset'] == 0 else f"{y['offset']}년 후"
-                report.append(f"  - {y['year']}년({label}) 세운: {y['stem']}{y['branch']} ({y['sipsin_stem']}/{y['sipsin_branch']} | {y['unseong']}){gm_tag}")
-            report.append("-" * 80)
-            report.append("  ※ 세운은 세는나이(태어난 해를 1세로 계산) 기준의 근사치이며, 연도 자체의 년주로 계산됩니다.")
-            report.append("=" * 80)
-
+        report = [
+            "=" * 80,
+            f"      [ {self.name} 님 정밀 사주명리 분석 자동화 V8 리포트 ]",
+            "=" * 80,
+            f"■ 성별 구별: {self.sex} 명식",
+            f"■ 연산 형식: {d['meta']['saju_type']}",
+            f"■ 일간 기질: 본인을 나타내는 기운은 {self.day_master}({STEM_INFO[self.day_master]['name']}) 기운입니다.",
+            "=" * 80
+        ]
         return "\n".join(report)
 
 # ============================================================================
-# [Streamlit UI] 입력 → 확인 → 사주정보 3단계
+# [Streamlit UI]
 # ============================================================================
-
 ELEMENT_COLORS = {
     '木': ('#e8f5e9', '#2e7d32'),
     '火': ('#ffebee', '#c62828'),
@@ -1152,32 +807,23 @@ ELEMENT_COLORS = {
     '水': ('#e3f2fd', '#1565c0'),
 }
 
-
 def _ohaeng_band_label(pct):
-    if pct < 5:
-        return '부족'
-    elif pct < 15:
-        return '약함'
-    elif pct < 30:
-        return '적정'
-    elif pct < 40:
-        return '발달'
+    if pct < 5: return '부족'
+    elif pct < 15: return '약함'
+    elif pct < 30: return '적정'
+    elif pct < 40: return '발달'
     return '과다'
 
-
 def _sipsin_distribution(analyzer):
-    """일간을 제외한 나머지 글자들의 십신 분포(개수/비율)"""
     order = ['비견', '겁재', '식신', '상관', '편재', '정재', '편관', '정관', '편인', '정인']
     counts = {k: 0 for k in order}
     for s in analyzer.stems:
-        if s == analyzer.day_master:
-            continue
-        counts[determine_ten_deity(analyzer.day_master, s, False)] += 1
+        if s != analyzer.day_master:
+            counts[determine_ten_deity(analyzer.day_master, s, False)] += 1
     for b in analyzer.branches:
         counts[determine_ten_deity(analyzer.day_master, b, True)] += 1
     total = sum(counts.values()) or 1
     return order, counts, total
-
 
 def _pillar_card_html(label, stem, stem_deity, branch, branch_deity, jijanggan, unseong, sinsal):
     s_bg, s_fg = ELEMENT_COLORS[STEM_INFO[stem]['element']]
@@ -1194,11 +840,8 @@ def _pillar_card_html(label, stem, stem_deity, branch, branch_deity, jijanggan, 
     </div>
     """
 
-
 def render_input_screen():
     st.markdown("### 🔮 답답명쾌 사주해답소 - 분석 정보 입력")
-    
-    # 1. 콤팩트한 이름/성별 라인
     col1, col2 = st.columns([1, 1])
     with col1:
         st.markdown("**이름**")
@@ -1208,7 +851,6 @@ def render_input_screen():
         sex = st.radio("성별 선택", ["여자", "남자"], horizontal=True, label_visibility="collapsed")
         sex_internal = "남성" if sex == "남자" else "여성"
 
-    # 2. 생년월일시
     st.markdown("**생년월일시**")
     col1, col2, col3, col4, col5 = st.columns([1.5, 1.2, 1, 1, 1.8])
     with col1:
@@ -1243,22 +885,16 @@ def render_input_screen():
     with col5:
         use_jasi_option = st.checkbox("야자시/조자시 적용")
         
-    time_boundary = "표준 자시(기본)"
-    if use_jasi_option:
-        time_boundary = "야자시 적용 (23:30~24:00)"
+    time_boundary = "야자시 적용 (23:30~24:00)" if use_jasi_option else "표준 자시(기본)"
 
     st.markdown("**출생 도시**")
     city_options = list(CITY_LONGITUDE_OFFSETS.keys()) + ["직접입력(해외 등)"]
     city = st.selectbox("도시명", city_options, index=city_options.index("서울특별시"), label_visibility="collapsed")
-    if city == "직접입력(해외 등)":
-        region_offset_mins = st.slider("경도 보정(분)", -45, 0, -30)
-    else:
-        region_offset_mins = CITY_LONGITUDE_OFFSETS[city]
+    region_offset_mins = st.slider("경도 보정(분)", -45, 0, -30) if city == "직접입력(해외 등)" else CITY_LONGITUDE_OFFSETS[city]
         
     st.markdown("**고객 고민 / 추가 전달 사항**")
     deep_question = st.text_area("고객 고민", placeholder="현재 고민이나 궁금한 점을 적어주시면 AI 분석 시 반영됩니다.", height=100, label_visibility="collapsed")
 
-    # 궁합 분석 (선택)
     st.markdown("**💕 궁합 분석 (선택)**")
     want_compat = st.checkbox("궁합 분석을 함께 신청할게요")
     compat_type = partner_name = partner_sex = partner_city = None
@@ -1270,12 +906,10 @@ def render_input_screen():
     if want_compat:
         compat_type = st.radio("궁합 유형", ["연인·배우자 궁합", "재회 궁합", "반려동물 궁합", "기타"], horizontal=True, key="compat_type")
         if compat_type == "기타":
-            compat_type_custom = st.text_input("궁합 유형을 직접 입력해주세요", placeholder="예: 동성 커플, 친구, 사업 파트너, 반려물건 등", key="compat_type_custom")
+            compat_type_custom = st.text_input("궁합 유형을 직접 입력해주세요", placeholder="예: 동성 커플, 친구, 사업 파트너 등", key="compat_type_custom")
             if compat_type_custom.strip():
                 compat_type = f"기타 ({compat_type_custom.strip()})"
         partner_label = "반려동물" if compat_type == "반려동물 궁합" else "상대방"
-        st.caption(f"{partner_label} 정보는 아는 만큼만 입력하시면 됩니다. 생년월일을 모르면 비워두셔도 참고용으로 분석됩니다.")
-
         pcol1, pcol2 = st.columns([1, 1])
         with pcol1:
             partner_name = st.text_input(f"{partner_label} 이름", key="partner_name")
@@ -1315,24 +949,18 @@ def render_input_screen():
                 partner_city = None
 
     st.write("")
-
-    # 1단계 버튼: 입력 완료 (토글 역할)
     if st.button("고객정보 입력완료", type="secondary", use_container_width=True):
         if not name.strip():
             st.error("이름을 입력해주세요.")
             return
         st.session_state.show_confirm = True
         
-    # 하단에 표시되는 결과 표 및 최종 버튼
     if st.session_state.get('show_confirm', False):
         st.markdown("---")
         st.markdown("<h3 style='text-align:center;'>✅ 입력 정보 최종 확인</h3>", unsafe_allow_html=True)
-        st.caption("<p style='text-align:center;'>수정이 필요하면 위에서 값을 변경하고 다시 버튼을 눌러주세요.</p>", unsafe_allow_html=True)
-        
         cal_str = ("음력(윤달)" if is_leap else "음력") if is_lunar else "양력"
         time_str = "모름" if time_unknown else birth_time.strftime('%H:%M')
         
-        # HTML Table for centralized and beautiful display
         table_html = f"""
         <table style="width: 100%; max-width: 600px; margin: 0 auto; border-collapse: collapse; text-align: left; background-color: white; border: 1px solid #e0e0e0; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
             <tr style="border-bottom: 1px solid #e0e0e0;"><th style="padding: 12px; width: 30%; background-color: #f7f9fa; border-right: 1px solid #e0e0e0;">이름</th><td style="padding: 12px;">{name}</td></tr>
@@ -1341,8 +969,7 @@ def render_input_screen():
             <tr style="border-bottom: 1px solid #e0e0e0;"><th style="padding: 12px; background-color: #f7f9fa; border-right: 1px solid #e0e0e0;">태어난 시간</th><td style="padding: 12px;">{time_str} ({time_boundary})</td></tr>
             <tr style="border-bottom: 1px solid #e0e0e0;"><th style="padding: 12px; background-color: #f7f9fa; border-right: 1px solid #e0e0e0;">출생 도시</th><td style="padding: 12px;">{city} (보정: {region_offset_mins}분)</td></tr>
             <tr><th style="padding: 12px; background-color: #f7f9fa; border-right: 1px solid #e0e0e0;">고객 고민</th><td style="padding: 12px;">{deep_question if deep_question.strip() else '없음'}</td></tr>
-        </table>
-        <br/>
+        </table><br/>
         """
         st.markdown(table_html, unsafe_allow_html=True)
 
@@ -1360,13 +987,11 @@ def render_input_screen():
                 <tr style="border-bottom: 1px solid #e0e0e0;"><th style="padding: 12px; background-color: #f7f9fa; border-right: 1px solid #e0e0e0;">{partner_label} 이름</th><td style="padding: 12px;">{partner_name.strip() if partner_name and partner_name.strip() else '없음'}</td></tr>
                 <tr style="border-bottom: 1px solid #e0e0e0;"><th style="padding: 12px; background-color: #f7f9fa; border-right: 1px solid #e0e0e0;">{partner_label} 성별</th><td style="padding: 12px;">{partner_sex}</td></tr>
                 <tr><th style="padding: 12px; background-color: #f7f9fa; border-right: 1px solid #e0e0e0;">{partner_label} 생년월일</th><td style="padding: 12px;">{birth_row}</td></tr>
-            </table>
-            <br/>
+            </table><br/>
             """
             st.markdown("<h4 style='text-align:center;'>💕 궁합 분석 정보</h4>", unsafe_allow_html=True)
             st.markdown(compat_table_html, unsafe_allow_html=True)
         
-        # 2단계 버튼: 구글 드라이브 연동 및 최종 전송
         if st.button("🚀 고객정보입력 완료", type="primary", use_container_width=True):
             data = {
                 'name': name.strip(), 'sex': sex_internal, 'is_lunar': is_lunar, 'is_leap': is_leap,
@@ -1374,23 +999,15 @@ def render_input_screen():
                 'city': city, 'region_offset_mins': region_offset_mins,
                 'dst_auto': True, 'time_boundary': time_boundary,
                 'profile': {
-                    'marital_status': None,
-                    'has_children': None,
-                    'job_status': None,
+                    'marital_status': None, 'has_children': None, 'job_status': None,
                     'deep_question': deep_question.strip() if deep_question.strip() else None,
                 },
-                'contact': {
-                    'phone': None,
-                    'email': None,
-                    'delivery_method': "카카오톡 남기기",
-                },
+                'contact': {'phone': None, 'email': None, 'delivery_method': "카카오톡 남기기"},
                 'compatibility': {'requested': False},
             }
             st.session_state.input_data = data
-            
             b_hour = data['birth_time'].hour if data['birth_time'] else None
             b_minute = data['birth_time'].minute if data['birth_time'] else 0
-
             dst_offset_mins = 0
             if data['dst_auto'] and not data['time_unknown'] and not data['is_lunar']:
                 auto_dst = get_dst_offset_minutes(data['birth_date'].year, data['birth_date'].month, data['birth_date'].day, b_hour, b_minute)
@@ -1414,12 +1031,10 @@ def render_input_screen():
                 compat_out = {'requested': False}
                 if want_compat:
                     compat_out = {
-                        'requested': True,
-                        'type': compat_type,
+                        'requested': True, 'type': compat_type,
                         'partner_name': (partner_name.strip() or None) if partner_name else None,
                         'partner_sex': partner_sex if partner_sex != "모름" else None,
-                        'partner_city': partner_city,
-                        'partner_saju': None,
+                        'partner_city': partner_city, 'partner_saju': None,
                     }
                     if partner_birth_known and partner_date and partner_sex in ("여자", "남자"):
                         try:
@@ -1429,8 +1044,7 @@ def render_input_screen():
                             p_region_offset = CITY_LONGITUDE_OFFSETS.get(partner_city, 0) if partner_city else 0
                             py, pm, pd_, ph, p_daewoon_num, p_daewoon_pillars, _, p_lst_dt = convert_to_pillars(
                                 partner_date.year, partner_date.month, partner_date.day, p_hour, p_minute,
-                                partner_is_lunar, partner_is_leap, p_sex_internal,
-                                "표준 자시(기본)", p_region_offset, 0,
+                                partner_is_lunar, partner_is_leap, p_sex_internal, "표준 자시(기본)", p_region_offset, 0,
                             )
                             partner_analyzer = AdvancedSajuAnalyzer(
                                 (partner_name.strip() if partner_name and partner_name.strip() else "상대방"),
@@ -1441,7 +1055,6 @@ def render_input_screen():
                         except Exception:
                             compat_out['partner_saju'] = None
                 saju_data['compatibility'] = compat_out
-
                 st.session_state.saju_data = saju_data
                 st.session_state.report_text = analyzer.generate_detailed_report()
                 st.session_state.step = 'result'
@@ -1449,59 +1062,87 @@ def render_input_screen():
             except Exception as e:
                 st.error(f"입력하신 정보로 사주를 계산할 수 없습니다: {e}")
 
-def _json_safe(obj):
-    """compute_all() dict를 json.dumps 가능한 형태로 변환(frozenset/set/tuple 은 list)."""
-    if isinstance(obj, dict):
-        return {str(k): _json_safe(v) for k, v in obj.items()}
-    if isinstance(obj, (list, tuple, set, frozenset)):
-        return [_json_safe(v) for v in obj]
-    return obj
-
 def _get_config(key):
-    try:
-        val = st.secrets.get(key)
-    except Exception:
-        val = None
+    try: val = st.secrets.get(key)
+    except Exception: val = None
     return val or os.environ.get(key)
 
-
 def render_gdrive_upload_section(saju_data, customer_name, birth_date):
-    st.subheader("📤 사주 정보 전송")
-    st.caption("사주분석엔진이 계산한 결과값 전체(위 JSON과 동일 — 원국/오행/십성/신강신약/용신/대운/세운/신살/배우자운·재운·직업운 등 누락 없이 전부)를 구글 드라이브(백업용 보관)와 n8n 풀이 파이프라인(웹훅)에 함께 전송합니다. 궁합 분석을 함께 신청해 상대방 사주도 계산된 경우, 두 사람 분석은 합치지 않고 완전히 별도로 전송합니다.")
+    st.write("---")
+    st.subheader("📄 프리미엄 사주 해답지 PDF 자동 생성")
+    st.caption("클로드 소넷 AI가 v5.0 지침서에 따라 19개 챕터의 심층 풀이를 작성하고 프리미엄 PDF로 즉시 렌더링합니다.")
 
+    if st.button("✨ 프리미엄 사주 리포트 PDF 생성 (클로드 소넷)", type="primary", use_container_width=True):
+        current_saju_data = st.session_state.get('saju_data')
+        current_analyzer = st.session_state.get('analyzer')
+        customer_name = current_analyzer.name if current_analyzer else current_saju_data.get('meta', {}).get('name', '고객')
+
+        if not current_saju_data:
+            st.error("사주 연산 데이터가 없습니다. 먼저 고객 정보를 입력해 주세요.")
+        else:
+            progress_bar = st.progress(0.0)
+            status_text = st.empty()
+
+            def on_progress(pct, msg):
+                progress_bar.progress(pct)
+                status_text.text(msg)
+
+            try:
+                from saju_report_generator import generate_saju_report
+                from saju_pdf_renderer import render_saju_report_pdf
+
+                with st.spinner("클로드 소넷 AI가 사주 해설을 작성 중입니다... (약 1분 소요)"):
+                    report_md = generate_saju_report(current_saju_data, progress_callback=on_progress)
+                    st.session_state.generated_report = report_md
+
+                status_text.text("🎨 PDF 조립 및 인쇄 중...")
+                pdf_filename = f"{customer_name}_프리미엄_사주해답지.pdf"
+                success = render_saju_report_pdf(current_saju_data, report_md, pdf_filename)
+
+                if success:
+                    st.session_state.generated_pdf = pdf_filename
+                    st.success("🎉 프리미엄 사주 해답지 PDF 생성이 완료되었습니다!")
+                else:
+                    st.error("PDF 렌더링에 실패했습니다. 환경을 확인해 주세요.")
+            except Exception as e:
+                st.error(f"생성 실패: {e}")
+
+    if st.session_state.get('generated_pdf'):
+        pdf_file = st.session_state.generated_pdf
+        if os.path.exists(pdf_file):
+            with open(pdf_file, "rb") as f:
+                pdf_bytes = f.read()
+            st.download_button(
+                label=f"📥 {pdf_file} 다운로드",
+                data=pdf_bytes,
+                file_name=pdf_file,
+                mime="application/pdf",
+                use_container_width=True
+            )
+            
+    st.subheader("📤 사주 정보 전송")
+    st.caption("사주분석 결과 전체를 구글 드라이브와 n8n 웹훅으로 전송합니다.")
     root_folder_id = _get_config("GDRIVE_ROOT_FOLDER_ID")
     webhook_url = _get_config("N8N_WEBHOOK_URL")
     webhook_secret = _get_config("N8N_WEBHOOK_SECRET")
 
-    if not root_folder_id:
-        st.warning("구글 드라이브 저장 폴더 ID(GDRIVE_ROOT_FOLDER_ID)가 설정되어 있지 않습니다. .streamlit/secrets.toml에 추가해주세요.")
-    if not webhook_url or not webhook_secret:
-        st.warning("n8n 웹훅 설정(N8N_WEBHOOK_URL / N8N_WEBHOOK_SECRET)이 없습니다. .streamlit/secrets.toml에 추가해주세요.")
-
     birth_str = birth_date.strftime("%Y%m%d") if birth_date else "생년월일미상"
-
     if st.button("📤 전송", type="primary", use_container_width=True):
         if root_folder_id:
             with st.spinner("구글 드라이브로 백업 저장 중..."):
                 ok, result = gdrive_uploader.upload_saju_data(customer_name, birth_str, saju_data, root_folder_id)
             if ok:
-                customer_url = f"https://drive.google.com/file/d/{result['customer']}/view"
-                lines = [f"드라이브 백업 완료! [신청인 분석 파일 열어보기]({customer_url})"]
-                if 'partner' in result:
-                    partner_url = f"https://drive.google.com/file/d/{result['partner']}/view"
-                    lines.append(f"[상대방 분석 파일 열어보기]({partner_url}) (별도 파일로 저장됨)")
-                st.success("  \n".join(lines))
+                st.success(f"드라이브 백업 완료! [신청인 파일 열기](https://drive.google.com/file/d/{result['customer']}/view)")
             else:
                 st.error(f"드라이브 백업 실패: {result}")
 
         if webhook_url and webhook_secret:
-            with st.spinner("n8n 풀이 파이프라인으로 전송 중..."):
+            with st.spinner("n8n으로 전송 중..."):
                 ok2, err2 = gdrive_uploader.send_to_n8n_webhook(customer_name, birth_str, saju_data, webhook_url, webhook_secret)
             if ok2:
-                st.success("n8n으로 전송 완료! 풀이 파이프라인이 시작됩니다.")
+                st.success("n8n으로 전송 완료!")
             else:
                 st.error(f"n8n 전송 실패: {err2}")
-
 
 def render_result_screen():
     analyzer = st.session_state.analyzer
@@ -1512,19 +1153,6 @@ def render_result_screen():
     saju_type = "사주팔자(四柱八字)" if analyzer.hour else "사주삼주(三柱 - 시간모름)"
     st.caption(f"{analyzer.sex} · {saju_type} · 일간 {analyzer.day_master}({STEM_INFO[analyzer.day_master]['name']})")
 
-    st.subheader("🗂️ 사주 정보 (JSON — 풀이 단계에서 그대로 읽어가는 원본 데이터)")
-    st.caption("이 화면 아래 카드들은 관리자가 대충 훑어보기 위한 참고용이고, 실제 풀이는 이 JSON을 기준으로 진행합니다. 배우자운/재운/직업운 등 서술형 계산 결과도 여기엔 전부 포함되어 있습니다.")
-    json_data = _json_safe(d)
-    json_text = json.dumps(json_data, ensure_ascii=False, indent=2)
-    with st.expander("📦 JSON 펼쳐보기", expanded=False):
-        st.code(json_text, language="json")
-    st.download_button(
-        "💾 사주 정보 JSON 다운로드 (.json)",
-        data=json_text,
-        file_name=f"{analyzer.name}_사주정보.json",
-        mime="application/json",
-    )
-
     st.write("---")
     render_gdrive_upload_section(d, analyzer.name, input_data.get('birth_date'))
 
@@ -1532,7 +1160,6 @@ def render_result_screen():
     st.caption("아래는 참고용 요약 화면입니다.")
 
     pos_idx = {p: i for i, p in enumerate(d['positions'])}
-
     def branch_meta(pos_key):
         i = pos_idx[pos_key]
         return d['unseong_list'][i], d['sinsal_list'][i], d['jijanggan_list'][i]
@@ -1557,15 +1184,11 @@ def render_result_screen():
     c1, c2 = st.columns(2)
     with c1:
         st.markdown(f"**납음오행(納音五行)**  \n{d['naeum_info']['name']}")
-        st.caption(d['naeum_info']['desc'])
         st.markdown(f"**격국(格局)**  \n{d['guckguk_info']['name']}")
-        st.caption(d['guckguk_info']['desc'])
     with c2:
         gm = d['gongmang_info']
         st.markdown(f"**공망(空亡)**  \n{'·'.join(gm['branches']) if gm['branches'] else '-'}")
-        st.caption(gm['desc'])
         st.markdown(f"**월령(月令)**  \n{d['deukryeong_info']['status']}")
-        st.caption(d['deukryeong_info']['desc'])
 
     st.write("---")
     st.subheader("오행 분석")
@@ -1640,32 +1263,16 @@ def render_result_screen():
     st.subheader("주요 신살(神殺)")
     s = d['sinsal']
     badges = []
-    if s['dohwa']['exists']:
-        badges.append('도화살')
-    if s['yangin']['exists']:
-        badges.append('양인살')
-    if s['goegang']['exists']:
-        badges.append('괴강살')
-    if s['cheoneul']['exists']:
-        badges.append('천을귀인')
-    if s['munchang']['exists']:
-        badges.append('문창귀인')
-    for w in s['wonjin']:
-        badges.append(w['name'])
+    if s['dohwa']['exists']: badges.append('도화살')
+    if s['yangin']['exists']: badges.append('양인살')
+    if s['goegang']['exists']: badges.append('괴강살')
+    if s['cheoneul']['exists']: badges.append('천을귀인')
+    if s['munchang']['exists']: badges.append('문창귀인')
+    for w in s['wonjin']: badges.append(w['name'])
     if badges:
         st.markdown(" ".join(f"`{b}`" for b in badges))
     else:
         st.caption("해당하는 주요 신살이 없습니다.")
-
-    st.write("---")
-    with st.expander("📄 상세 텍스트 리포트 보기"):
-        st.code(st.session_state.report_text, language="text")
-        st.download_button(
-            "💾 텍스트 리포트 다운로드 (.txt)",
-            data=st.session_state.report_text,
-            file_name=f"{analyzer.name}_사주정보.txt",
-            mime="text/plain",
-        )
 
     st.write("")
     if st.button("← 처음부터 다시"):
@@ -1675,7 +1282,6 @@ def render_result_screen():
             st.session_state.pop(k, None)
         st.session_state.step = 'input'
         st.rerun()
-
 
 def main():
     st.set_page_config(
