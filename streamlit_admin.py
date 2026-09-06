@@ -304,7 +304,8 @@ if app_mode == "📝 사주 상담 신청서 (고객용)":
     month_options = [f"{m}월" for m in range(1, 13)]
     day_options = [f"{d}일" for d in range(1, 32)]
 
-    c_y, c_m, c_d = st.columns()
+    # ★ 오류 수정: st.columns(3) 으로 정직하게 3칸 분할 지정
+    c_y, c_m, c_d = st.columns(3)
     with c_y:
       selected_year = st.selectbox(
           "출생년도",
@@ -384,6 +385,7 @@ if app_mode == "📝 사주 상담 신청서 (고객용)":
         " 사용됩니다."
     )
     st.markdown("<br>", unsafe_allow_html=True)
+    # ★ 사장님께서 변경 요청하신 문구: '사주풀이 신청하기' 반영
     if st.button(
         "🔮 사주풀이 신청하기", type="primary", use_container_width=True
     ):
