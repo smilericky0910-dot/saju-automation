@@ -24,7 +24,7 @@ import streamlit as st
 # 1. 페이지 기본 설정 (모바일 최적화 centered)
 # -----------------------------------------------------------------------------
 st.set_page_config(
-    page_title="답답명쾌 사주해답소",
+    page_title="답답명쾌 사주해답소 | 심층 사주풀이",
     page_icon="🔮",
     layout="centered",
     initial_sidebar_state="collapsed",
@@ -227,22 +227,23 @@ with st.sidebar:
   st.divider()
   app_mode = st.radio(
       "화면 모드 전환",
-      ["📝 사주 상담 신청서 (고객용)", "🔐 사장님 관리자 모드"],
+      ["📝 심층 사주풀이 신청서 (고객용)", "🔐 사장님 관리자 모드"],
       index=0,
   )
   st.divider()
-  st.caption("고객에게 전달 시: '사주 상담 신청서'가 기본으로 보입니다.")
+  st.caption("고객에게 전달 시: '심층 사주풀이 신청서'가 기본으로 보입니다.")
 
 
 # =============================================================================
 # [화면 1] 고객용 사주 심층 상담 신청서
 # =============================================================================
-if app_mode == "📝 사주 상담 신청서 (고객용)":
+if app_mode == "📝 심층 사주풀이 신청서 (고객용)":
+  # ★ 요청하신 상단 헤더 문구 적용 완료
   st.markdown(
       """
     <div class="banner-box">
-        <div class="banner-badge">✨ 정통 명리학 맞춤 사주 감정</div>
-        <div class="banner-title">사주 심층 상담 신청서</div>
+        <div class="banner-badge">✨ 답답명쾌 사주 해답소</div>
+        <div class="banner-title">심층 사주풀이 신청서</div>
         <div class="banner-desc">고객님의 생년월일시와 상담 고민을 남겨주시면, 정밀 사주원국을 분석하여 심층 풀이 및 맞춤형 PDF 보고서를 카카오톡으로 발송해 드립니다.</div>
     </div>
     """,
@@ -262,7 +263,7 @@ if app_mode == "📝 사주 상담 신청서 (고객용)":
         "성별 *", ["남성 (乾命)", "여성 (坤命)"], horizontal=True
     )
 
-    # 2. 생년월일 및 출생시 (★ 100세까지 전수 선택 가능한 드롭다운 적용!)
+    # 2. 생년월일 및 출생시 (100세까지 전수 선택 가능한 드롭다운 적용)
     st.markdown(
         '<div class="section-title">📅 생년월일 및 출생시 <span'
         ' style="font-size:12px;color:#dc2626;font-weight:normal;">* 필수'
@@ -297,14 +298,12 @@ if app_mode == "📝 사주 상담 신청서 (고객용)":
 
     st.markdown("**생년월일 (년 · 월 · 일)**")
     current_year = datetime.datetime.now().year  # 2026년
-    # 2026년부터 100세 어르신(1925년생)까지 101개년 전수 선택 지원!
     year_options = [
         f"{y}년" for y in range(current_year, current_year - 101, -1)
     ]
     month_options = [f"{m}월" for m in range(1, 13)]
     day_options = [f"{d}일" for d in range(1, 32)]
 
-    # ★ 오류 수정: st.columns(3) 으로 정직하게 3칸 분할 지정
     c_y, c_m, c_d = st.columns(3)
     with c_y:
       selected_year = st.selectbox(
@@ -385,7 +384,7 @@ if app_mode == "📝 사주 상담 신청서 (고객용)":
         " 사용됩니다."
     )
     st.markdown("<br>", unsafe_allow_html=True)
-    # ★ 사장님께서 변경 요청하신 문구: '사주풀이 신청하기' 반영
+    # ★ '사주풀이 신청하기' 버튼 문구 반영
     if st.button(
         "🔮 사주풀이 신청하기", type="primary", use_container_width=True
     ):
@@ -422,8 +421,8 @@ if app_mode == "📝 사주 상담 신청서 (고객용)":
             res = requests.post(WEB_APP_URL, json=payload, timeout=15)
             if res.status_code == 200:
               st.success(
-                  f"🎉 {name}님, 사주 상담 접수가 완료되었습니다! 확인 후 정밀"
-                  " 감정서가 카카오톡으로 발송됩니다."
+                  f"🎉 {name}님, 사주풀이 접수가 완료되었습니다! 확인 후 정밀 감정서가"
+                  " 카카오톡으로 발송됩니다."
               )
               st.balloons()
             else:
