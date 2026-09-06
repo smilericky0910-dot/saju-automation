@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""[답답명쾌 사주해답소] 고객 신청서 & 사장님 전용 원클릭 자동화 관리 시스템"""
+"""[답답명쾌 사주해답소] 고객 신청서 & 사장님 전용 원클릭 모바일 친화 관리 시스템"""
 
 import datetime
 import json
@@ -20,17 +20,17 @@ from saju_report_generator import generate_saju_report
 import streamlit as st
 
 # -----------------------------------------------------------------------------
-# 1. 페이지 기본 설정
+# 1. 페이지 기본 설정 (centered로 변경)
 # -----------------------------------------------------------------------------
 st.set_page_config(
-    page_title="답답명쾌 사주해답소 | 사주 심층 상담",
+    page_title="답답명쾌 사주해답소",
     page_icon="🔮",
-    layout="wide",
+    layout="centered",
     initial_sidebar_state="collapsed",
 )
 
-# 구글 앱스 스크립트 웹 앱 URL (secrets.toml에서 불러오기)
-WEB_APP_URL = st.secrets.get("GOOGLE_APPS_SCRIPT_URL", "")
+# 사장님의 구글 웹앱 URL (스프레드시트 연동)
+WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxFPVPgYvx3q-saacm0OkUuELMb-GomV5UDLTVUGRrSuzxDCQdXywyPePQqVhRxJz25Kw/exec"
 
 # 관리자 모드 기본 비밀번호
 ADMIN_PASSWORD = "1234"
@@ -53,48 +53,89 @@ ADMIN_CITY_OFFSETS = {
 }
 
 # -----------------------------------------------------------------------------
-# 2. 스타일 CSS
+# 2. 모바일 친화형 스타일 CSS (PC에서도 얇고 긴 스마트폰 뷰 구현)
 # -----------------------------------------------------------------------------
 st.markdown(
     """
 <style>
+    /* 전체 배경: 세련된 연회색 */
+    [data-testid="stAppViewContainer"] {
+        background-color: #f1f1f4 !important;
+    }
+    
+    /* PC 모니터에서도 스마트폰처럼 중앙에 480px로 얇고 길게 고정 */
+    .block-container {
+        max-width: 480px !important;
+        margin: 20px auto !important;
+        padding: 24px 18px !important;
+        background-color: #ffffff !important;
+        border-radius: 20px !important;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08) !important;
+        border: 1px solid #e2e2e8 !important;
+    }
+
+    /* 실제 모바일 접속 시에는 테두리 없이 꽉 차게 표시 */
+    @media (max-width: 520px) {
+        [data-testid="stAppViewContainer"] {
+            background-color: #ffffff !important;
+        }
+        .block-container {
+            max-width: 100% !important;
+            margin: 0 !important;
+            padding: 16px 14px !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+            border: none !important;
+        }
+    }
+
+    /* 상단 배너 */
     .banner-box {
         background: linear-gradient(135deg, #1c1917 0%, #292524 100%);
         color: #fafaf9;
-        padding: 24px 22px;
+        padding: 20px 18px;
         border-radius: 12px;
-        margin-bottom: 24px;
+        margin-bottom: 20px;
         border-left: 5px solid #d97706;
     }
     .banner-badge {
-        font-size: 13px;
+        font-size: 12px;
         font-weight: 600;
         color: #f59e0b;
-        margin-bottom: 6px;
+        margin-bottom: 4px;
     }
     .banner-title {
-        font-size: 26px;
+        font-size: 22px;
         font-weight: 700;
         color: #ffffff;
-        margin-bottom: 8px;
+        margin-bottom: 6px;
         font-family: 'Noto Serif KR', serif;
     }
     .banner-desc {
-        font-size: 13px;
+        font-size: 12px;
         color: #d6d3d1;
         line-height: 1.5;
     }
     .section-title {
-        font-size: 16px;
+        font-size: 15px;
         font-weight: 700;
         color: #292524;
-        margin-top: 18px;
-        margin-bottom: 12px;
+        margin-top: 16px;
+        margin-bottom: 10px;
+    }
+    
+    /* 관리자 카드 스타일 */
+    .customer-card {
+        background: #fafafa;
+        border: 1px solid #e5e5e5;
+        border-radius: 12px;
+        padding: 14px 16px;
+        margin-bottom: 14px;
     }
     .status-badge {
-        padding: 4px 10px;
+        padding: 3px 8px;
         border-radius: 9999px;
-        font-size: 12px;
+        font-size: 11px;
         font-weight: 600;
         display: inline-block;
     }
@@ -102,6 +143,12 @@ st.markdown(
     .badge-analyzed { background-color: #dbeafe; color: #1e40af; border: 1px solid #bfdbfe; }
     .badge-sent { background-color: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
     .badge-closed { background-color: #f3f4f6; color: #4b5563; border: 1px solid #e5e7eb; }
+
+    /* 버튼 모바일 터치 최적화 */
+    .stButton>button {
+        border-radius: 8px !important;
+        font-weight: 700 !important;
+    }
 </style>
 """,
     unsafe_allow_html=True,
@@ -200,7 +247,7 @@ if app_mode == "📝 사주 상담 신청서 (고객용)":
   st.markdown(
       """
     <div class="banner-box">
-        <div class="banner-badge">✨ 정통 명리학 기반 맞춤 사주 감정</div>
+        <div class="banner-badge">✨ 정통 명리학 맞춤 사주 감정</div>
         <div class="banner-title">사주 심층 상담 신청서</div>
         <div class="banner-desc">고객님의 생년월일시와 상담 고민을 남겨주시면, 정밀 사주원국을 분석하여 심층 풀이 및 맞춤형 PDF 보고서를 카카오톡으로 발송해 드립니다.</div>
     </div>
@@ -215,32 +262,31 @@ if app_mode == "📝 사주 상담 신청서 (고객용)":
         " 항목</span></div>",
         unsafe_allow_html=True,
     )
-    col_name, col_gender = st.columns(2)
-    with col_name:
-      name = st.text_input("성명 (이름) * (필수)", placeholder="예: 홍길동")
-    with col_gender:
-      gender = st.radio("성별 * (필수)", ["남성 (乾命)", "여성 (坤命)"], horizontal=True)
+    name = st.text_input("성명 (이름) *", placeholder="예: 홍길동")
+    gender = st.radio(
+        "성별 *", ["남성 (乾命)", "여성 (坤命)"], horizontal=True
+    )
 
     st.markdown(
-        '<div class="section-title">📅 생년월일 및 출생시 (사주 원국 산출) <span'
+        '<div class="section-title">📅 생년월일 및 출생시 <span'
         ' style="font-size:12px;color:#dc2626;font-weight:normal;">* 필수'
         " 항목</span></div>",
         unsafe_allow_html=True,
     )
-    col_cal, col_date, col_city = st.columns(3)
-    with col_cal:
-      cal_type = st.selectbox(
-          "양력 / 음력 구분 * (필수)", ["양력 (Solar)", "음력 (평달)", "음력 (윤달)"]
-      )
-    with col_date:
+    cal_type = st.selectbox(
+        "양력 / 음력 구분 *", ["양력 (Solar)", "음력 (평달)", "음력 (윤달)"]
+    )
+
+    c_b1, c_b2 = st.columns(2)
+    with c_b1:
       birth_date = st.date_input(
-          "생년월일 * (필수)",
+          "생년월일 *",
           value=datetime.date(1995, 6, 15),
           min_value=datetime.date(1930, 1, 1),
       )
-    with col_city:
+    with c_b2:
       city = st.selectbox(
-          "출생도시 (태어난 지역) * (필수)",
+          "출생도시 *",
           [
               "서울",
               "경기/인천",
@@ -274,7 +320,7 @@ if app_mode == "📝 사주 상담 신청서 (고객용)":
           "술시(戌時) 19:30 ~ 21:30",
           "해시(亥時) 21:30 ~ 23:30",
       ]
-      selected_time = st.selectbox("태어난 시간 * (필수)", time_options, index=6)
+      selected_time = st.selectbox("태어난 시간 *", time_options, index=6)
       time_final = selected_time
     else:
       st.caption("시간을 모르실 경우 년·월·일(삼주)을 기반으로 정밀 풀이됩니다.")
@@ -286,28 +332,23 @@ if app_mode == "📝 사주 상담 신청서 (고객용)":
         " 항목</span></div>",
         unsafe_allow_html=True,
     )
-    col_phone, col_email = st.columns(2)
-    with col_phone:
-      phone = st.text_input(
-          "휴대폰 번호 * (필수 - 카카오 알림톡/PDF 수신용)",
-          placeholder="예: 010-1234-5678",
-      )
-    with col_email:
-      email = st.text_input(
-          "이메일 주소 (선택사항)", placeholder="예: example@naver.com"
-      )
+    phone = st.text_input(
+        "📱 휴대폰 번호 * (카카오 알림톡/PDF 수신용)",
+        placeholder="010-1234-5678",
+    )
+    email = st.text_input("✉️ 이메일 주소 (선택)", placeholder="example@naver.com")
 
     st.markdown(
         '<div class="section-title">💬 상담 고민 및 집중 질문 (선택)</div>',
         unsafe_allow_html=True,
     )
     concern = st.text_area(
-        "풀고 싶은 가장 큰 답답함이나 궁금한 점을 적어주세요.",
+        "가장 궁금한 점이나 고민을 적어주세요.",
         placeholder=(
             "예: 올해 이직운과 시험 합격운이 궁금합니다. 연애 및 결혼 시기, 재물운의 흐름을"
             " 알고 싶어요."
         ),
-        height=110,
+        height=100,
     )
 
     st.caption(
@@ -351,7 +392,7 @@ if app_mode == "📝 사주 상담 신청서 (고객용)":
             res = requests.post(WEB_APP_URL, json=payload, timeout=15)
             if res.status_code == 200:
               st.success(
-                  f"🎉 {name}님, 사주 상담 접수가 성공적으로 완료되었습니다! 확인 후 정밀"
+                  f"🎉 {name}님, 사주 상담 접수가 완료되었습니다! 확인 후 정밀"
                   " 감정서가 카카오톡으로 발송됩니다."
               )
               st.balloons()
@@ -362,29 +403,27 @@ if app_mode == "📝 사주 상담 신청서 (고객용)":
 
 
 # =============================================================================
-# [화면 2] 사장님 전용 관리자 모드
+# [화면 2] 사장님 전용 관리자 모드 (모바일 카드 뷰 최적화)
 # =============================================================================
 elif app_mode == "🔐 사장님 관리자 모드":
   st.markdown("### 🔐 사장님 전용 접수 관리 센터")
-  st.caption("고객 정보 보호를 위해 관리자 인증 후 이용하실 수 있습니다.")
+  st.caption("고객 정보 보호를 위해 비밀번호를 입력해 주세요.")
 
   admin_pw = st.text_input(
-      "관리자 비밀번호를 입력하세요", type="password", placeholder="기본 비밀번호: 1234"
+      "관리자 비밀번호", type="password", placeholder="기본 비밀번호: 1234"
   )
 
   if admin_pw == ADMIN_PASSWORD:
-    st.success("인증 완료: 관리자 모드가 활성화되었습니다.")
+    st.success("관리자 모드가 활성화되었습니다.")
 
-    ctrl_col1, ctrl_col2 = st.columns()
-    with ctrl_col1:
-      if st.button("🔄 시트 데이터 즉시 새로고침", use_container_width=True):
-        st.rerun()
+    if st.button("🔄 시트 데이터 즉시 새로고침", use_container_width=True):
+      st.rerun()
 
     with st.spinner("구글 스프레드시트에서 접수 목록을 조회하는 중..."):
       raw_data = fetch_applicants()
 
     if not raw_data:
-      st.info("현재 구글 시트에 접수된 고객 데이터가 없습니다.")
+      st.info("현재 접수된 고객 데이터가 없습니다.")
     else:
       df = pd.DataFrame(raw_data)
 
@@ -392,45 +431,41 @@ elif app_mode == "🔐 사장님 관리자 모드":
       pending_count = len(df[df["처리상태"].isin(["대기중", "", None])])
       analyzed_count = len(df[df["처리상태"] == "분석완료"])
       sent_count = len(df[df["처리상태"] == "발송완료"])
-      closed_count = len(df[df["처리상태"] == "상담종료"])
 
-      c1, c2, c3, c4 = st.columns(4)
+      c1, c2 = st.columns(2)
       c1.metric("총 접수", f"{total_count}명")
       c2.metric(
-          "대기중 (처리 필요)",
+          "대기중",
           f"{pending_count}명",
           delta=f"{pending_count}건",
           delta_color="inverse",
       )
-      c3.metric("발송완료 (전송됨)", f"{sent_count}명")
-      c4.metric("상담종료 (보관)", f"{closed_count}명")
 
       st.divider()
 
-      filter_val = st.radio(
-          "상태별 목록 필터링",
+      filter_val = st.selectbox(
+          "상태별 목록 필터",
           [
               "전체 목록",
-              "대기중 (입금/분석 대기)",
+              "대기중 (분석 대기)",
               "분석완료 (PDF 제작됨)",
               "발송완료 (알림톡 전송)",
-              "상담종료 (완료된 건)",
+              "상담종료 (보관)",
           ],
-          horizontal=True,
       )
 
-      if filter_val == "대기중 (입금/분석 대기)":
+      if "대기중" in filter_val:
         filtered_df = df[df["처리상태"].isin(["대기중", "", None])]
-      elif filter_val == "분석완료 (PDF 제작됨)":
+      elif "분석완료" in filter_val:
         filtered_df = df[df["처리상태"] == "분석완료"]
-      elif filter_val == "발송완료 (알림톡 전송)":
+      elif "발송완료" in filter_val:
         filtered_df = df[df["처리상태"] == "발송완료"]
-      elif filter_val == "상담종료 (완료된 건)":
+      elif "상담종료" in filter_val:
         filtered_df = df[df["처리상태"] == "상담종료"]
       else:
         filtered_df = df
 
-      st.subheader(f"📋 {filter_val} ({len(filtered_df)}건)")
+      st.caption(f"총 {len(filtered_df)}건의 접수 내역이 있습니다.")
 
       for idx, row in filtered_df.iterrows():
         row_idx = row.get("row_index", idx + 2)
@@ -447,234 +482,209 @@ elif app_mode == "🔐 사장님 관리자 모드":
         elif status == "상담종료":
           badge_class = "badge-closed"
 
+        raw_phone = str(row.get("휴대폰", ""))
+        clean_phone = "".join(c for c in raw_phone if c.isdigit())
+
+        # 모바일 카드 디자인
         with st.container():
-          card_col1, card_col2, card_col3 = st.columns()
+          st.markdown(
+              f"""
+                    <div style="background:#fcfcfc; border:1px solid #e2e2e8; border-radius:12px; padding:14px; margin-bottom:12px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                            <span style="font-size:17px; font-weight:800; color:#18181b;">{c_name} 님</span>
+                            <span class='status-badge {badge_class}'>{status}</span>
+                        </div>
+                        <div style="font-size:12px; color:#52525b; line-height:1.6; margin-bottom:8px;">
+                            • 성별/양음력: {row.get('성별','-')} | {row.get('양음력','-')}<br/>
+                            • 생년월일: {str(row.get('생년월일','-')).split('T')[0]} ({row.get('태어난시간','-')})<br/>
+                            • 출생도시: {row.get('출생도시','-')}<br/>
+                            • 연락처: <strong>{row.get('휴대폰','-')}</strong>
+                        </div>
+                        <div style="font-size:12px; color:#27272a; background:#f4f4f5; padding:8px 10px; border-radius:6px; margin-bottom:12px;">
+                            💬 <em>"{row.get('고객고민', '고민 미작성')}"</em>
+                        </div>
+                    </div>
+                    """,
+              unsafe_allow_html=True,
+          )
 
-          with card_col1:
-            st.markdown(
-                f"### **{c_name}** 님  <span class='status-badge"
-                f" {badge_class}'>{status}</span>",
-                unsafe_allow_html=True,
-            )
-            st.caption(
-                f"성별: {row.get('성별','-')} | {row.get('양음력','-')} | 생년월일:"
-                f" {str(row.get('생년월일','-')).split('T')[0]}"
-            )
-            st.caption(
-                f"시간: {row.get('태어난시간','-')} | 출생지:"
-                f" {row.get('출생도시','-')}"
-            )
+          # ★ [분석 시작] 원클릭 실행 버튼
+          if st.button(
+              "분석 시작",
+              key=f"btn_run_{row_idx}",
+              type="primary",
+              use_container_width=True,
+          ):
+            with st.status(
+                f"🔮 [{c_name}] 님 사주 분석 및 리포트 자동 생성 중...",
+                expanded=True,
+            ) as status_box:
+              try:
+                status_box.write("1️⃣ 고객 정보 및 음양력/출생시 파싱 중...")
+                gender_internal = (
+                    "남성" if "남" in str(row.get("성별", "남")) else "여성"
+                )
+                cal_type_str = str(row.get("양음력", "양력"))
+                is_lunar = "음력" in cal_type_str
+                is_leap = "윤달" in cal_type_str
 
-          with card_col2:
-            st.markdown(
-                f"**📞 연락처:** `{row.get('휴대폰','-')}` |"
-                f" `{row.get('이메일','-')}`"
-            )
-            st.markdown(
-                f"**💬 고객 고민:** *\"{row.get('고객고민', '작성된 고민 없음')}\"*"
-            )
+                b_raw = (
+                    str(row.get("생년월일", "1990-01-01")).split("T")[0].strip()
+                )
+                b_parts = [int(p) for p in b_raw.split("-")]
+                birth_date_obj = datetime.date(
+                    b_parts[0], b_parts, b_parts
+                )
 
-          with card_col3:
-            st.markdown("**⚡ 분석 및 상태 관리**")
+                b_hour, b_minute, time_unknown = parse_time_from_string(
+                    row.get("태어난시간", "")
+                )
+                city_str = str(row.get("출생도시", "서울"))
+                region_offset = ADMIN_CITY_OFFSETS.get(city_str, -32)
 
-            # ★ [분석 시작] 버튼
-            if st.button(
-                "분석 시작",
-                key=f"btn_run_{row_idx}",
-                type="primary",
-                use_container_width=True,
-            ):
-              with st.status(
-                  f"🔮 [{c_name}] 님 사주 분석 및 리포트 자동 생성 중...",
-                  expanded=True,
-              ) as status_box:
-                try:
-                  # 1. 시트 고객 정보 파싱
-                  status_box.write("1️⃣ 고객 접수 정보 해석 중...")
-                  gender_internal = (
-                      "남성" if "남" in str(row.get("성별", "남")) else "여성"
-                  )
-                  cal_type_str = str(row.get("양음력", "양력"))
-                  is_lunar = "음력" in cal_type_str
-                  is_leap = "윤달" in cal_type_str
-
-                  # 생년월일 추출
-                  b_raw = (
-                      str(row.get("생년월일", "1990-01-01"))
-                      .split("T")[0]
-                      .strip()
-                  )
-                  b_parts = [int(p) for p in b_raw.split("-")]
-                  birth_date_obj = datetime.date(
-                      b_parts[0], b_parts, b_parts
-                  )
-
-                  # 태어난 시간 추출
-                  b_hour, b_minute, time_unknown = parse_time_from_string(
-                      row.get("태어난시간", "")
-                  )
-
-                  # 도시 보정값
-                  city_str = str(row.get("출생도시", "서울"))
-                  region_offset = ADMIN_CITY_OFFSETS.get(city_str, -32)
-
-                  # 서머타임 보정
-                  dst_offset = 0
-                  if not time_unknown and not is_lunar:
-                    auto_dst = get_dst_offset_minutes(
-                        birth_date_obj.year,
-                        birth_date_obj.month,
-                        birth_date_obj.day,
-                        b_hour,
-                        b_minute,
-                    )
-                    dst_offset = 60 if auto_dst > 0 else 0
-
-                  # 2. 사주 명식 연산
-                  status_box.write("2️⃣ 정밀 만세력 및 오행·대운 계산 중...")
-                  (
-                      year_p,
-                      month_p,
-                      day_p,
-                      hour_p,
-                      daewoon_num,
-                      daewoon_pillars,
-                      is_forward,
-                      lst_dt,
-                  ) = convert_to_pillars(
+                dst_offset = 0
+                if not time_unknown and not is_lunar:
+                  auto_dst = get_dst_offset_minutes(
                       birth_date_obj.year,
                       birth_date_obj.month,
                       birth_date_obj.day,
                       b_hour,
                       b_minute,
-                      is_lunar,
-                      is_leap,
-                      gender_internal,
-                      "표준 자시(기본)",
-                      region_offset,
-                      dst_offset,
+                  )
+                  dst_offset = 60 if auto_dst > 0 else 0
+
+                status_box.write("2️⃣ 정밀 만세력 및 오행·용신 계산 중...")
+                (
+                    year_p,
+                    month_p,
+                    day_p,
+                    hour_p,
+                    daewoon_num,
+                    daewoon_pillars,
+                    is_forward,
+                    lst_dt,
+                ) = convert_to_pillars(
+                    birth_date_obj.year,
+                    birth_date_obj.month,
+                    birth_date_obj.day,
+                    b_hour,
+                    b_minute,
+                    is_lunar,
+                    is_leap,
+                    gender_internal,
+                    "표준 자시(기본)",
+                    region_offset,
+                    dst_offset,
+                )
+
+                analyzer = AdvancedSajuAnalyzer(
+                    c_name,
+                    gender_internal,
+                    year_p,
+                    month_p,
+                    day_p,
+                    hour_p,
+                    daewoon_num,
+                    daewoon_pillars,
+                    birth_date=lst_dt.date(),
+                    profile={"deep_question": row.get("고객고민")},
+                )
+                saju_data = analyzer.compute_all()
+                contact_info = {
+                    "phone": clean_phone,
+                    "email": str(row.get("이메일", "")),
+                }
+                saju_data["contact"] = contact_info
+
+                status_box.write(
+                    "3️⃣ 클로드 AI 19개 챕터 감정서 작성 중 (약 1분 소요)..."
+                )
+                report_md = generate_saju_report(saju_data)
+
+                status_box.write("4️⃣ 프리미엄 감정서 PDF 파일 렌더링 중...")
+                now = datetime.datetime.now()
+                pdf_filename = (
+                    f"{c_name}_{clean_phone}.pdf"
+                    if clean_phone
+                    else f"{c_name}_{now.strftime('%Y%m%d%H%M')}.pdf"
+                )
+
+                pdf_ok = render_saju_report_pdf(
+                    saju_data, report_md, pdf_filename
+                )
+                if not pdf_ok:
+                  raise RuntimeError(
+                      "PDF 렌더링에 실패했습니다. packages.txt 설정을 확인해"
+                      " 주세요."
                   )
 
-                  analyzer = AdvancedSajuAnalyzer(
-                      c_name,
-                      gender_internal,
-                      year_p,
-                      month_p,
-                      day_p,
-                      hour_p,
-                      daewoon_num,
-                      daewoon_pillars,
-                      birth_date=lst_dt.date(),
-                      profile={"deep_question": row.get("고객고민")},
-                  )
-                  saju_data = analyzer.compute_all()
+                status_box.write(
+                    "5️⃣ 구글 드라이브 날짜별 폴더로 PDF 업로드 중..."
+                )
+                upload_res = gdrive_uploader.upload_pdf_to_date_folder(
+                    file_content=pdf_filename,
+                    filename=pdf_filename,
+                    date_obj=now,
+                    contact_info=contact_info,
+                )
 
-                  raw_phone = str(row.get("휴대폰", ""))
-                  clean_phone = "".join(c for c in raw_phone if c.isdigit())
-                  contact_info = {
-                      "phone": clean_phone,
-                      "email": str(row.get("이메일", "")),
-                  }
-                  saju_data["contact"] = contact_info
+                if os.path.exists(pdf_filename):
+                  os.remove(pdf_filename)
 
-                  # 3. 클로드 AI 사주 해설서 19개 챕터 작성
-                  status_box.write(
-                      "3️⃣ 클로드 AI 19개 챕터 감정서 작성 중 (약 1분"
-                      " 소요)..."
-                  )
-                  report_md = generate_saju_report(saju_data)
-
-                  # 4. PDF 조립 및 렌더링
-                  status_box.write("4️⃣ 프리미엄 감정서 PDF 파일 렌더링 중...")
-                  now = datetime.datetime.now()
-                  if clean_phone:
-                    pdf_filename = f"{c_name}_{clean_phone}.pdf"
-                  else:
-                    pdf_filename = (
-                        f"{c_name}_{now.strftime('%Y%m%d%H%M')}.pdf"
-                    )
-
-                  pdf_ok = render_saju_report_pdf(
-                      saju_data, report_md, pdf_filename
-                  )
-                  if not pdf_ok:
-                    raise RuntimeError(
-                        "PDF 렌더링에 실패했습니다. packages.txt 설정을"
-                        " 확인해 주세요."
-                    )
-
-                  # 5. 구글 드라이브 업로드
-                  status_box.write(
-                      "5️⃣ 구글 드라이브 날짜별 폴더로 PDF 업로드 중..."
-                  )
-                  upload_res = gdrive_uploader.upload_pdf_to_date_folder(
-                      file_content=pdf_filename,
-                      filename=pdf_filename,
-                      date_obj=now,
-                      contact_info=contact_info,
+                status_box.write(
+                    "6️⃣ 카카오 알림톡 3시간 뒤 자동 예약 등록 중..."
+                )
+                file_id = upload_res.get("id", "")
+                if clean_phone and file_id:
+                  schedule_saju_alimtalk_3hours_later(
+                      c_name, clean_phone, file_id
                   )
 
-                  if os.path.exists(pdf_filename):
-                    os.remove(pdf_filename)
+                status_box.write(
+                    "7️⃣ 구글 시트 상태를 '발송완료'로 업데이트 중..."
+                )
+                update_status_in_sheet(row_idx, "발송완료", c_name)
 
-                  # 6. 솔라피 카카오 알림톡 3시간 뒤 예약
-                  status_box.write(
-                      "6️⃣ 카카오 알림톡 3시간 뒤 자동 예약 등록 중..."
-                  )
-                  file_id = upload_res.get("id", "")
-                  if clean_phone and file_id:
-                    schedule_saju_alimtalk_3hours_later(
-                        c_name, clean_phone, file_id
-                    )
+                status_box.update(
+                    label=f"✅ [{c_name}] 님 사주 분석 및 알림톡 발송 완료!",
+                    state="complete",
+                )
+                st.success(
+                    f"🎉 [{c_name}] 님 리포트 제작 및 3시간 뒤 알림톡 예약"
+                    " 완료!"
+                )
+                time.sleep(1.5)
+                st.rerun()
 
-                  # 7. 구글 시트 상태 '발송완료' 갱신
-                  status_box.write(
-                      "7️⃣ 구글 시트 상태를 '발송완료'로 업데이트 중..."
-                  )
-                  update_status_in_sheet(row_idx, "발송완료", c_name)
+              except Exception as run_err:
+                status_box.update(
+                    label=f"❌ 오류 발생: {run_err}", state="error"
+                )
+                st.error(f"분석 실행 중 실패: {run_err}")
 
-                  status_box.update(
-                      label=f"✅ [{c_name}] 님 사주 분석 및 알림톡 발송 완료!",
-                      state="complete",
-                  )
-                  st.success(
-                      f"🎉 [{c_name}] 님 리포트가 성공적으로 생성되어 드라이브에"
-                      " 저장되었고, 3시간 뒤 알림톡 예약이 접수되었습니다!"
-                  )
-                  time.sleep(1.5)
-                  st.rerun()
-
-                except Exception as run_err:
-                  status_box.update(
-                      label=f"❌ 오류 발생: {run_err}", state="error"
-                  )
-                  st.error(f"분석 실행 중 실패: {run_err}")
-
-            # 상태 수동 관리 버튼 (상담종료 / 복원)
+          # 보조 관리 버튼 (상담종료 / 대기중 복원)
+          b_col1, b_col2 = st.columns(2)
+          with b_col1:
             if status != "상담종료":
               if st.button(
-                  "✅ 상담종료 처리",
-                  key=f"btn_close_{row_idx}",
-                  use_container_width=True,
+                  "상담종료", key=f"btn_close_{row_idx}", use_container_width=True
               ):
-                with st.spinner("시트 상태 변경 중..."):
+                with st.spinner("상태 변경 중..."):
                   if update_status_in_sheet(row_idx, "상담종료", c_name):
-                    st.success("상담종료 완료!")
-                    time.sleep(0.5)
                     st.rerun()
             else:
               if st.button(
-                  "↩️ 대기중 복원",
+                  "대기중 복원",
                   key=f"btn_revert_{row_idx}",
                   use_container_width=True,
               ):
-                with st.spinner("시트 상태 복원 중..."):
+                with st.spinner("복원 중..."):
                   if update_status_in_sheet(row_idx, "대기중", c_name):
-                    st.success("대기중 복원 완료!")
-                    time.sleep(0.5)
                     st.rerun()
+          with b_col2:
+            st.caption(f"접수번호 #{row_idx}")
 
-          st.divider()
+          st.markdown("---")
 
   elif admin_pw:
     st.error("비밀번호가 일치하지 않습니다. 다시 입력해 주세요.")
