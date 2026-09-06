@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""[답답명쾌 사주해답소] 고객 신청서 & 사장님 전용 원클릭 모바일 친화 관리 시스템"""
+"""[답답명쾌 사주해답소] 고객 신청서 & 사장님 전용 시트2 물리이동/삭제 관리 시스템"""
 
 import calendar
 import datetime
@@ -30,13 +30,9 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# 사장님의 구글 웹앱 URL (스프레드시트 연동)
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxFPVPgYvx3q-saacm0OkUuELMb-GomV5UDLTVUGRrSuzxDCQdXywyPePQqVhRxJz25Kw/exec"
-
-# 관리자 모드 기본 비밀번호
 ADMIN_PASSWORD = "1234"
 
-# 간이 도시 경도 오프셋 매핑
 ADMIN_CITY_OFFSETS = {
     "서울": -32,
     "경기/인천": -32,
@@ -54,17 +50,14 @@ ADMIN_CITY_OFFSETS = {
 }
 
 # -----------------------------------------------------------------------------
-# 2. 모바일 친화형 스타일 CSS (상단 배너 전체 가운데 정렬 적용)
+# 2. 스타일 CSS (모바일 최적화 & 상단 배너 가운데 정렬)
 # -----------------------------------------------------------------------------
 st.markdown(
     """
 <style>
-    /* 전체 배경 */
     [data-testid="stAppViewContainer"] {
         background-color: #f1f1f4 !important;
     }
-    
-    /* PC 모니터에서도 스마트폰처럼 중앙에 480px로 얇고 길게 고정 */
     .block-container {
         max-width: 480px !important;
         margin: 20px auto !important;
@@ -74,12 +67,8 @@ st.markdown(
         box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08) !important;
         border: 1px solid #e2e2e8 !important;
     }
-
-    /* 실제 스마트폰 접속 시에는 테두리 없이 화면에 꽉 차게 표시 */
     @media (max-width: 520px) {
-        [data-testid="stAppViewContainer"] {
-            background-color: #ffffff !important;
-        }
+        [data-testid="stAppViewContainer"] { background-color: #ffffff !important; }
         .block-container {
             max-width: 100% !important;
             margin: 0 !important;
@@ -89,8 +78,6 @@ st.markdown(
             border: none !important;
         }
     }
-
-    /* ★ 상단 헤더 배너 (가운데 정렬) */
     .banner-box {
         background: linear-gradient(135deg, #1c1917 0%, #292524 100%);
         color: #fafaf9;
@@ -129,25 +116,16 @@ st.markdown(
         margin-top: 16px;
         margin-bottom: 10px;
     }
-    
-    /* 관리자 상태 배지 */
     .status-badge {
         padding: 3px 8px;
         border-radius: 9999px;
         font-size: 11px;
-        font-weight: 600;
+        font-weight: 700;
         display: inline-block;
     }
     .badge-pending { background-color: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
-    .badge-analyzed { background-color: #dbeafe; color: #1e40af; border: 1px solid #bfdbfe; }
     .badge-sent { background-color: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
-    .badge-closed { background-color: #f3f4f6; color: #4b5563; border: 1px solid #e5e7eb; }
-
-    /* 모바일 터치 최적화 버튼 */
-    .stButton>button {
-        border-radius: 8px !important;
-        font-weight: 700 !important;
-    }
+    .stButton>button { border-radius: 8px !important; font-weight: 700 !important; }
 </style>
 """,
     unsafe_allow_html=True,
@@ -155,76 +133,92 @@ st.markdown(
 
 
 # -----------------------------------------------------------------------------
-# 3. 구글 시트 통신 및 시간 파싱 함수
+# 3. 구글 시트 통신 함수 (시트2 이동 / 시트1 삭제 탑재)
 # -----------------------------------------------------------------------------
 def fetch_applicants():
-  """구글 시트 웹앱에서 전체 신청자 목록 가져오기"""
   try:
     res = requests.get(WEB_APP_URL, timeout=10)
-    if res.status_code == 200:
-      return res.json()
-    return []
+    return res.json() if res.status_code == 200 else []
   except Exception as e:
     st.error(f"구글 시트 연동 오류: {e}")
     return []
 
 
-def update_status_in_sheet(row_index, new_status, customer_name=""):
-  """구글 시트의 처리상태 변경"""
+def update_status_in_sheet(row_index, new_status, customer_name="", phone=""):
   try:
     payload = {
         "action": "update_status",
-        "row_index": row_index,
-        "status": new_status,
-        "name": customer_name,
+        "row_index": int(row_index),
+        "status": str(new_status),
+        "name": str(customer_name),
+        "phone": str(phone),
     }
     res = requests.post(WEB_APP_URL, json=payload, timeout=10)
     return res.status_code == 200
-  except Exception as e:
-    st.error(f"상태 변경 통신 오류: {e}")
+  except Exception:
+    return False
+
+
+def move_customer_to_sheet2(row_index, customer_name="", phone=""):
+  """시트1에서 시트2로 행을 물리적으로 이동 (시트1에서는 삭제)"""
+  try:
+    payload = {
+        "action": "move_to_sheet2",
+        "row_index": int(row_index),
+        "name": str(customer_name),
+        "phone": str(phone),
+    }
+    res = requests.post(WEB_APP_URL, json=payload, timeout=10)
+    return res.status_code == 200
+  except Exception:
+    return False
+
+
+def delete_customer_from_sheet1(row_index, customer_name="", phone=""):
+  """미입금자 등 시트1에서 영구 삭제"""
+  try:
+    payload = {
+        "action": "delete_row",
+        "row_index": int(row_index),
+        "name": str(customer_name),
+        "phone": str(phone),
+    }
+    res = requests.post(WEB_APP_URL, json=payload, timeout=10)
+    return res.status_code == 200
+  except Exception:
     return False
 
 
 def parse_time_from_string(time_str):
-  """시트의 태어난시간 텍스트를 (hour, minute, time_unknown)으로 변환"""
   if not time_str or "모름" in str(time_str) or str(time_str).strip() == "-":
     return None, 0, True
-
   s = str(time_str)
-  if "자시" in s:
-    return 0, 0, False
-  elif "축시" in s:
-    return 2, 30, False
-  elif "인시" in s:
-    return 4, 30, False
-  elif "묘시" in s:
-    return 6, 30, False
-  elif "진시" in s:
-    return 8, 30, False
-  elif "사시" in s:
-    return 10, 30, False
-  elif "오시" in s:
-    return 12, 30, False
-  elif "미시" in s:
-    return 14, 30, False
-  elif "신시" in s:
-    return 16, 30, False
-  elif "유시" in s:
-    return 18, 30, False
-  elif "술시" in s:
-    return 20, 30, False
-  elif "해시" in s:
-    return 22, 30, False
-
+  time_map = {
+      "자시": (0, 0),
+      "축시": (2, 30),
+      "인시": (4, 30),
+      "묘시": (6, 30),
+      "진시": (8, 30),
+      "사시": (10, 30),
+      "오시": (12, 30),
+      "미시": (14, 30),
+      "신시": (16, 30),
+      "유시": (18, 30),
+      "술시": (20, 30),
+      "해시": (22, 30),
+  }
+  for k, v in time_map.items():
+    if k in s:
+      return v[0], v, False
   try:
-    parts = s.split(":")
-    return int(parts[0]), int(parts), False
+    p = s.split(":")
+    return int(p[0]), int(p), False
   except Exception:
     return 12, 0, False
 
 
 # -----------------------------------------------------------------------------
-# 4. 상단 네비게이션
+# 4. 사이드바 모드 전환
 # -----------------------------------------------------------------------------
 with st.sidebar:
   st.markdown("### 🔮 답답명쾌 사주해답소")
@@ -235,15 +229,12 @@ with st.sidebar:
       ["📝 심층 사주풀이 신청서 (고객용)", "🔐 사장님 관리자 모드"],
       index=0,
   )
-  st.divider()
-  st.caption("고객에게 전달 시: '심층 사주풀이 신청서'가 기본으로 보입니다.")
 
 
 # =============================================================================
-# [화면 1] 고객용 사주 심층 상담 신청서
+# [화면 1] 고객용 사주풀이 신청서
 # =============================================================================
 if app_mode == "📝 심층 사주풀이 신청서 (고객용)":
-  # ★ 전체 가운데 정렬 적용된 상단 헤더 배너
   st.markdown(
       """
     <div class="banner-box">
@@ -256,7 +247,6 @@ if app_mode == "📝 심층 사주풀이 신청서 (고객용)":
   )
 
   with st.container():
-    # 1. 신청자 기본 정보 (한자 없이 깔끔하게 '남성', '여성')
     st.markdown(
         '<div class="section-title">👤 신청자 기본 정보 <span'
         ' style="font-size:12px;color:#dc2626;font-weight:normal;">* 필수'
@@ -266,7 +256,6 @@ if app_mode == "📝 심층 사주풀이 신청서 (고객용)":
     name = st.text_input("성명 (이름) *", placeholder="예: 홍길동")
     gender = st.radio("성별 *", ["남성", "여성"], horizontal=True)
 
-    # 2. 생년월일 및 출생시
     st.markdown(
         '<div class="section-title">📅 생년월일 및 출생시 <span'
         ' style="font-size:12px;color:#dc2626;font-weight:normal;">* 필수'
@@ -300,7 +289,7 @@ if app_mode == "📝 심층 사주풀이 신청서 (고객용)":
       )
 
     st.markdown("**생년월일 (년 · 월 · 일)**")
-    current_year = datetime.datetime.now().year  # 2026년
+    current_year = datetime.datetime.now().year
     year_options = [
         f"{y}년" for y in range(current_year, current_year - 101, -1)
     ]
@@ -355,7 +344,6 @@ if app_mode == "📝 심층 사주풀이 신청서 (고객용)":
       st.caption("시간을 모르실 경우 년·월·일(삼주)을 기반으로 정밀 풀이됩니다.")
       time_final = "모름 (시간미상)"
 
-    # 3. 연락처 정보
     st.markdown(
         '<div class="section-title">📱 연락처 정보 (보고서 수신용) <span'
         ' style="font-size:12px;color:#dc2626;font-weight:normal;">* 필수'
@@ -368,7 +356,6 @@ if app_mode == "📝 심층 사주풀이 신청서 (고객용)":
     )
     email = st.text_input("✉️ 이메일 주소 (선택)", placeholder="example@naver.com")
 
-    # 4. 상담 고민
     st.markdown(
         '<div class="section-title">💬 상담 고민 및 집중 질문 (선택)</div>',
         unsafe_allow_html=True,
@@ -396,10 +383,8 @@ if app_mode == "📝 심층 사주풀이 신청서 (고객용)":
       elif not phone.strip():
         st.error("휴대폰 번호를 입력해 주세요!")
       else:
-        # ★ 스피너 멘트 교체
         with st.spinner("고객님의 사주풀이 신청이 접수 중입니다..."):
           gender_clean = "남" if "남" in gender else "여"
-          gender_full = "남성" if "남" in gender else "여성"
           cal_clean = (
               "양력"
               if "양력" in cal_type
@@ -412,10 +397,8 @@ if app_mode == "📝 심층 사주풀이 신청서 (고객용)":
               else "전반적인 인생 운세 및 직업/재물운"
           )
 
-          # ★ sex, gender, 성별 등 모든 키 매핑 전송 (시트 저장 누락 원천 해결!)
           payload = {
               "action": "new_application",
-              # 한글 키
               "이름": name.strip(),
               "성별": gender_clean,
               "양음력": cal_clean,
@@ -425,34 +408,21 @@ if app_mode == "📝 심층 사주풀이 신청서 (고객용)":
               "휴대폰": phone.strip(),
               "이메일": email.strip(),
               "고객고민": concern_clean,
-              # 영문 키 (★ sex 키 추가로 구글 시트 성별 완벽 저장)
               "sex": gender_clean,
               "gender": gender_clean,
-              "Sex": gender_clean,
-              "Gender": gender_clean,
               "name": name.strip(),
               "cal_type": cal_clean,
-              "calendar_type": cal_clean,
               "birth_date": b_date_str,
               "birth_time": time_final,
-              "time": time_final,
               "city": city,
               "phone": phone.strip(),
               "email": email.strip(),
               "concern": concern_clean,
-              # camelCase
-              "birthDate": b_date_str,
-              "birthTime": time_final,
-              "calendarType": cal_clean,
-              "calType": cal_clean,
-              "customerName": name.strip(),
-              "phoneNumber": phone.strip(),
           }
 
           try:
             res = requests.post(WEB_APP_URL, json=payload, timeout=15)
             if res.status_code == 200:
-              # ★ '안전하게' 제외된 최종 완료 문구
               st.success(
                   f"🎉 {name}님, 사주풀이 신청이 접수되었습니다!\n\n"
                   "답답하신 마음이 시원하게 풀리도록 꼼꼼히 분석하겠습니다.\n"
@@ -468,10 +438,10 @@ if app_mode == "📝 심층 사주풀이 신청서 (고객용)":
 
 
 # =============================================================================
-# [화면 2] 사장님 전용 관리자 모드 (모바일 카드 뷰 최적화)
+# [화면 2] 사장님 전용 관리자 모드 (시트1 실시간 관리 & 시트2 물리이동)
 # =============================================================================
 elif app_mode == "🔐 사장님 관리자 모드":
-  st.markdown("### 🔐 사장님 전용 접수 관리 센터")
+  st.markdown("### 🔐 사장님 전용 접수 관리 센터 (시트1 실시간)")
   st.caption("고객 정보 보호를 위해 비밀번호를 입력해 주세요.")
 
   admin_pw = st.text_input(
@@ -481,85 +451,44 @@ elif app_mode == "🔐 사장님 관리자 모드":
   if admin_pw == ADMIN_PASSWORD:
     st.success("관리자 모드가 활성화되었습니다.")
 
-    if st.button("🔄 시트 데이터 즉시 새로고침", use_container_width=True):
+    if st.button("🔄 시트1 최신 데이터 즉시 새로고침", use_container_width=True):
       st.rerun()
 
-    with st.spinner("구글 스프레드시트에서 접수 목록을 조회하는 중..."):
+    with st.spinner("구글 스프레드시트1에서 접수 목록을 조회하는 중..."):
       raw_data = fetch_applicants()
 
     if not raw_data:
-      st.info("현재 접수된 고객 데이터가 없습니다.")
+      st.info(
+          "현재 시트1에 대기 중인 접수 데이터가 없습니다. (모두 처리되었거나"
+          " 시트2로 이동되었습니다)"
+      )
     else:
       df = pd.DataFrame(raw_data)
+      st.caption(f"현재 시트1에 총 **{len(df)}명**의 고객이 있습니다.")
 
-      total_count = len(df)
-      pending_count = len(df[df["처리상태"].isin(["대기중", "", None])])
-      analyzed_count = len(df[df["처리상태"] == "분석완료"])
-      sent_count = len(df[df["처리상태"] == "발송완료"])
-
-      c1, c2 = st.columns(2)
-      c1.metric("총 접수", f"{total_count}명")
-      c2.metric(
-          "대기중",
-          f"{pending_count}명",
-          delta=f"{pending_count}건",
-          delta_color="inverse",
-      )
-
-      st.divider()
-
-      filter_val = st.selectbox(
-          "상태별 목록 필터",
-          [
-              "전체 목록",
-              "대기중 (분석 대기)",
-              "분석완료 (PDF 제작됨)",
-              "발송완료 (알림톡 전송)",
-              "상담종료 (보관)",
-          ],
-      )
-
-      if "대기중" in filter_val:
-        filtered_df = df[df["처리상태"].isin(["대기중", "", None])]
-      elif "분석완료" in filter_val:
-        filtered_df = df[df["처리상태"] == "분석완료"]
-      elif "발송완료" in filter_val:
-        filtered_df = df[df["처리상태"] == "발송완료"]
-      elif "상담종료" in filter_val:
-        filtered_df = df[df["처리상태"] == "상담종료"]
-      else:
-        filtered_df = df
-
-      st.caption(f"총 {len(filtered_df)}건의 접수 내역이 있습니다.")
-
-      for idx, row in filtered_df.iterrows():
+      for idx, row in df.iterrows():
         row_idx = row.get("row_index", idx + 2)
         c_name = row.get("이름", "무명")
         status = row.get("처리상태", "대기중")
         if not status:
           status = "대기중"
 
-        badge_class = "badge-pending"
-        if status == "분석완료":
-          badge_class = "badge-analyzed"
-        elif status == "발송완료":
-          badge_class = "badge-sent"
-        elif status == "상담종료":
-          badge_class = "badge-closed"
-
+        badge_class = (
+            "badge-sent" if status == "발송완료" else "badge-pending"
+        )
         raw_phone = str(row.get("휴대폰", ""))
         clean_phone = "".join(c for c in raw_phone if c.isdigit())
 
-        # 모바일 카드 디자인
         with st.container():
           st.markdown(
               f"""
-                    <div style="background:#fcfcfc; border:1px solid #e2e2e8; border-radius:12px; padding:14px; margin-bottom:12px;">
+                    <div style="background:#fcfcfc; border:1px solid #e2e2e8; border-radius:12px; padding:14px; margin-bottom:10px;">
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
                             <span style="font-size:17px; font-weight:800; color:#18181b;">{c_name} 님</span>
                             <span class='status-badge {badge_class}'>{status}</span>
                         </div>
                         <div style="font-size:12px; color:#52525b; line-height:1.6; margin-bottom:8px;">
+                            • 접수일시: {row.get('접수일시', '-')}<br/>
                             • 성별/양음력: {row.get('성별','-')} | {row.get('양음력','-')}<br/>
                             • 생년월일: {str(row.get('생년월일','-')).split('T')[0]} ({row.get('태어난시간','-')})<br/>
                             • 출생도시: {row.get('출생도시','-')}<br/>
@@ -573,11 +502,18 @@ elif app_mode == "🔐 사장님 관리자 모드":
               unsafe_allow_html=True,
           )
 
-          # ★ [분석 시작] 원클릭 실행 버튼
+          # 1. [분석 시작] 버튼 (AI가 분석 후 '발송완료'로 변경하되, 리스트에서 절대 안 지움!)
+          btn_label = (
+              "⚡ 사주 분석 시작 (원클릭 자동생성)"
+              if status == "대기중"
+              else "🔄 리포트 재분석 (다시 생성하기)"
+          )
+          btn_color = "primary" if status == "대기중" else "secondary"
+
           if st.button(
-              "분석 시작",
+              btn_label,
               key=f"btn_run_{row_idx}",
-              type="primary",
+              type=btn_color,
               use_container_width=True,
           ):
             with st.status(
@@ -585,7 +521,7 @@ elif app_mode == "🔐 사장님 관리자 모드":
                 expanded=True,
             ) as status_box:
               try:
-                status_box.write("1️⃣ 고객 정보 및 음양력/출생시 파싱 중...")
+                status_box.write("1️⃣ 고객 정보 파싱 중...")
                 gender_internal = (
                     "남성" if "남" in str(row.get("성별", "남")) else "여성"
                 )
@@ -618,7 +554,7 @@ elif app_mode == "🔐 사장님 관리자 모드":
                   )
                   dst_offset = 60 if auto_dst > 0 else 0
 
-                status_box.write("2️⃣ 정밀 만세력 및 오행·용신 계산 중...")
+                status_box.write("2️⃣ 정밀 만세력 계산 중...")
                 (
                     year_p,
                     month_p,
@@ -661,12 +597,10 @@ elif app_mode == "🔐 사장님 관리자 모드":
                 }
                 saju_data["contact"] = contact_info
 
-                status_box.write(
-                    "3️⃣ 클로드 AI 19개 챕터 감정서 작성 중 (약 1분 소요)..."
-                )
+                status_box.write("3️⃣ 클로드 AI 19개 챕터 리포트 작성 중...")
                 report_md = generate_saju_report(saju_data)
 
-                status_box.write("4️⃣ 프리미엄 감정서 PDF 파일 렌더링 중...")
+                status_box.write("4️⃣ PDF 파일 렌더링 중...")
                 now = datetime.datetime.now()
                 pdf_filename = (
                     f"{c_name}_{clean_phone}.pdf"
@@ -678,14 +612,9 @@ elif app_mode == "🔐 사장님 관리자 모드":
                     saju_data, report_md, pdf_filename
                 )
                 if not pdf_ok:
-                  raise RuntimeError(
-                      "PDF 렌더링에 실패했습니다. packages.txt 설정을 확인해"
-                      " 주세요."
-                  )
+                  raise RuntimeError("PDF 렌더링에 실패했습니다.")
 
-                status_box.write(
-                    "5️⃣ 구글 드라이브 날짜별 폴더로 PDF 업로드 중..."
-                )
+                status_box.write("5️⃣ 구글 드라이브 업로드 중...")
                 upload_res = gdrive_uploader.upload_pdf_to_date_folder(
                     file_content=pdf_filename,
                     filename=pdf_filename,
@@ -706,48 +635,68 @@ elif app_mode == "🔐 사장님 관리자 모드":
                   )
 
                 status_box.write(
-                    "7️⃣ 구글 시트 상태를 '발송완료'로 업데이트 중..."
+                    "7️⃣ 시트1 상태를 '발송완료'로 업데이트 중..."
                 )
-                update_status_in_sheet(row_idx, "발송완료", c_name)
+                update_status_in_sheet(row_idx, "발송완료", c_name, clean_phone)
 
                 status_box.update(
                     label=f"✅ [{c_name}] 님 사주 분석 및 알림톡 발송 완료!",
                     state="complete",
                 )
                 st.success(
-                    f"🎉 [{c_name}] 님 리포트 제작 및 3시간 뒤 알림톡 예약"
-                    " 완료!"
+                    f"🎉 [{c_name}] 님 리포트 생성 및 알림톡 예약 완료! (전달"
+                    " 확인 후 아래 '시트2로 이동' 버튼을 누르시면 시트1에서 쏙"
+                    " 빠집니다)"
                 )
-                time.sleep(1.5)
+                time.sleep(1.2)
                 st.rerun()
 
               except Exception as run_err:
                 status_box.update(
                     label=f"❌ 오류 발생: {run_err}", state="error"
                 )
-                st.error(f"분석 실행 중 실패: {run_err}")
+                st.error(f"실패: {run_err}")
 
-          # 보조 관리 버튼 (상담종료 / 대기중 복원)
-          b_col1, b_col2 = st.columns(2)
-          with b_col1:
-            if status != "상담종료":
-              if st.button(
-                  "상담종료", key=f"btn_close_{row_idx}", use_container_width=True
-              ):
-                with st.spinner("상태 변경 중..."):
-                  if update_status_in_sheet(row_idx, "상담종료", c_name):
-                    st.rerun()
-            else:
-              if st.button(
-                  "대기중 복원",
-                  key=f"btn_revert_{row_idx}",
-                  use_container_width=True,
-              ):
-                with st.spinner("복원 중..."):
-                  if update_status_in_sheet(row_idx, "대기중", c_name):
-                    st.rerun()
-          with b_col2:
-            st.caption(f"접수번호 #{row_idx}")
+          # 2. ★ 사장님 전용 2대 관리 버튼: [시트2로 이동] & [미입금자 삭제]
+          st.write("")
+          col_move, col_del = st.columns(2)
+
+          with col_move:
+            if st.button(
+                "📦 시트2(보관)로 이동",
+                key=f"btn_move_{row_idx}",
+                use_container_width=True,
+            ):
+              with st.spinner("시트2로 이동 처리 중..."):
+                if move_customer_to_sheet2(row_idx, c_name, clean_phone):
+                  st.success(
+                      f"✅ [{c_name}] 님이 시트2로 이동되고 시트1에서 완전히"
+                      " 정리되었습니다!"
+                  )
+                  time.sleep(0.8)
+                  st.rerun()
+                else:
+                  st.error(
+                      "이동 처리에 실패했습니다. Apps Script 설정을 확인해"
+                      " 주세요."
+                  )
+
+          with col_del:
+            if st.button(
+                "🗑️ 미입금자 삭제",
+                key=f"btn_del_{row_idx}",
+                use_container_width=True,
+            ):
+              with st.spinner("시트1에서 영구 삭제 중..."):
+                if delete_customer_from_sheet1(row_idx, c_name, clean_phone):
+                  st.warning(
+                      f"🗑️ [{c_name}] 님의 접수건이 시트1에서 영구"
+                      " 삭제되었습니다."
+                  )
+                  time.sleep(0.8)
+                  st.rerun()
+                else:
+                  st.error("삭제 처리에 실패했습니다.")
 
           st.markdown("---")
 
