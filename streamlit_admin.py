@@ -252,6 +252,10 @@ def parse_time_from_string(time_str):
 query_params = st.query_params if hasattr(st, "query_params") else st.experimental_get_query_params()
 is_admin_mode = str(query_params.get("admin", "")).lower() in ["true", "1", "yes"]
 
+# Session state: cache saju analysis data
+if "saju_analysis_cache" not in st.session_state:
+    st.session_state.saju_analysis_cache = {}
+
 
 # =============================================================================
 # [화면 1] 손님용 심층 사주풀이 신청서
@@ -452,8 +456,8 @@ else:
                     </div>
                     """, unsafe_allow_html=True)
 
-                    # 1. [사주 분석 시작] 버튼
-                    btn_label = "⚡ 사주 분석 시작 (원클릭 자동생성)" if status == "대기중" else "🔄 리포트 재분석 (다시 생성하기)"
+                    # Step 2: [📝 사주풀이 및 발송] 버튼
+                    btn_label = "📝 사주풀이 및 발송 (PDF+알림톡)" if status == "대기중" else "🔄 리포트 재분석 (다시 생성하기)"
                     btn_color = "primary" if status == "대기중" else "secondary"
 
                     if st.button(btn_label, key=f"btn_run_{row_idx}", type=btn_color, use_container_width=True):
@@ -582,8 +586,8 @@ else:
                                 else:
                                     st.error("삭제 실패")
 
-                    # 사주정보 미리보기 (관리자 검증용)
-                    if st.button("🔍 사주정보 미리보기 (만세력 확인)", key=f"btn_preview_{row_idx}", use_container_width=True):
+                    # Step 1: [📊 사주분석] 버튼 - 사주분석엔진으로 고객정보 분석
+                    if st.button("📊 사주분석 (만세력 생성)", key=f"btn_preview_{row_idx}", use_container_width=True):
                         try:
                             with st.spinner(f"[{c_name}] 님의 사주정보를 계산 중..."):
                                 # 고객정보 파싱
@@ -608,7 +612,7 @@ else:
                                     )
                                     dst_offset = 60 if auto_dst > 0 else 0
 
-                                # 사주 계산
+                                # [Step 1] 사주분석: 만세력 계산
                                 (year_p, month_p, day_p, hour_p,
                                  daewoon_num, daewoon_pillars, is_forward, lst_dt) = convert_to_pillars(
                                     birth_date_obj.year, birth_date_obj.month, birth_date_obj.day,
@@ -616,8 +620,26 @@ else:
                                     "표준 자시(기본)", region_offset, dst_offset
                                 )
 
+                                # 분석 데이터 생성
+                                analyzer = AdvancedSajuAnalyzer(
+                                    c_name, gender_internal, year_p, month_p, day_p, hour_p,
+                                    daewoon_num, daewoon_pillars, birth_date=lst_dt.date(),
+                                    profile={"deep_question": c_concern}
+                                )
+                                saju_data = analyzer.compute_all()
+
+                                # 세션에 캐시 저장
+                                cache_key = f"{row_idx}_{clean_phone}"
+                                st.session_state.saju_analysis_cache[cache_key] = {
+                                    "saju_data": saju_data,
+                                    "c_name": c_name,
+                                    "clean_phone": clean_phone,
+                                    "c_email": c_email,
+                                    "c_concern": c_concern
+                                }
+
                                 # 사주정보 표시
-                                st.success(f"✅ [{c_name}] 님 사주정보 계산 완료!")
+                                st.success(f"✅ [{c_name}] 님 사주분석 완료!")
                                 st.markdown(f"""
                                 **📊 사주 원국 (만세력)**
                                 - **년주(年柱):** {year_p[0]}{year_p[1]}
@@ -627,10 +649,10 @@ else:
                                 - **기준 명식:** {lst_dt.strftime('%Y-%m-%d %H:%M')}
                                 - **대운수:** {daewoon_num}
                                 """)
-                                st.info("✓ 이 사주정보로 분석을 진행합니다. 문제가 없으면 '⚡ 사주 분석 시작' 버튼을 클릭하세요.")
+                                st.info("✓ Step 1 완료! 이제 아래의 '📝 사주풀이 및 발송' 버튼을 클릭하면 리포트가 생성되고 PDF가 발송됩니다.")
 
                         except Exception as e:
-                            st.error(f"❌ 사주정보 계산 실패: {e}")
+                            st.error(f"❌ 사주분석 실패: {e}")
 
                     st.markdown("---")
 
