@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """[답답명쾌 사주해답소] 고객 신청서 & 사장님 전용 원클릭 모바일 친화 관리 시스템"""
 
+import calendar
 import datetime
 import json
 import os
@@ -20,7 +21,7 @@ from saju_report_generator import generate_saju_report
 import streamlit as st
 
 # -----------------------------------------------------------------------------
-# 1. 페이지 기본 설정 (centered로 변경)
+# 1. 페이지 기본 설정 (모바일 최적화 centered)
 # -----------------------------------------------------------------------------
 st.set_page_config(
     page_title="답답명쾌 사주해답소",
@@ -58,7 +59,7 @@ ADMIN_CITY_OFFSETS = {
 st.markdown(
     """
 <style>
-    /* 전체 배경: 세련된 연회색 */
+    /* 전체 배경 */
     [data-testid="stAppViewContainer"] {
         background-color: #f1f1f4 !important;
     }
@@ -74,7 +75,7 @@ st.markdown(
         border: 1px solid #e2e2e8 !important;
     }
 
-    /* 실제 모바일 접속 시에는 테두리 없이 꽉 차게 표시 */
+    /* 실제 스마트폰 접속 시에는 테두리 없이 화면에 꽉 차게 표시 */
     @media (max-width: 520px) {
         [data-testid="stAppViewContainer"] {
             background-color: #ffffff !important;
@@ -89,7 +90,7 @@ st.markdown(
         }
     }
 
-    /* 상단 배너 */
+    /* 상단 헤더 배너 */
     .banner-box {
         background: linear-gradient(135deg, #1c1917 0%, #292524 100%);
         color: #fafaf9;
@@ -124,14 +125,7 @@ st.markdown(
         margin-bottom: 10px;
     }
     
-    /* 관리자 카드 스타일 */
-    .customer-card {
-        background: #fafafa;
-        border: 1px solid #e5e5e5;
-        border-radius: 12px;
-        padding: 14px 16px;
-        margin-bottom: 14px;
-    }
+    /* 관리자 상태 배지 */
     .status-badge {
         padding: 3px 8px;
         border-radius: 9999px;
@@ -144,7 +138,7 @@ st.markdown(
     .badge-sent { background-color: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
     .badge-closed { background-color: #f3f4f6; color: #4b5563; border: 1px solid #e5e7eb; }
 
-    /* 버튼 모바일 터치 최적화 */
+    /* 모바일 터치 최적화 버튼 */
     .stButton>button {
         border-radius: 8px !important;
         font-weight: 700 !important;
@@ -256,6 +250,7 @@ if app_mode == "📝 사주 상담 신청서 (고객용)":
   )
 
   with st.container():
+    # 1. 신청자 기본 정보
     st.markdown(
         '<div class="section-title">👤 신청자 기본 정보 <span'
         ' style="font-size:12px;color:#dc2626;font-weight:normal;">* 필수'
@@ -267,24 +262,20 @@ if app_mode == "📝 사주 상담 신청서 (고객용)":
         "성별 *", ["남성 (乾命)", "여성 (坤命)"], horizontal=True
     )
 
+    # 2. 생년월일 및 출생시 (★ 100세까지 전수 선택 가능한 드롭다운 적용!)
     st.markdown(
         '<div class="section-title">📅 생년월일 및 출생시 <span'
         ' style="font-size:12px;color:#dc2626;font-weight:normal;">* 필수'
         " 항목</span></div>",
         unsafe_allow_html=True,
     )
-    cal_type = st.selectbox(
-        "양력 / 음력 구분 *", ["양력 (Solar)", "음력 (평달)", "음력 (윤달)"]
-    )
 
-    c_b1, c_b2 = st.columns(2)
-    with c_b1:
-      birth_date = st.date_input(
-          "생년월일 *",
-          value=datetime.date(1995, 6, 15),
-          min_value=datetime.date(1930, 1, 1),
+    col_cal, col_city = st.columns(2)
+    with col_cal:
+      cal_type = st.selectbox(
+          "양력 / 음력 구분 *", ["양력 (Solar)", "음력 (평달)", "음력 (윤달)"]
       )
-    with c_b2:
+    with col_city:
       city = st.selectbox(
           "출생도시 *",
           [
@@ -303,6 +294,41 @@ if app_mode == "📝 사주 상담 신청서 (고객용)":
               "해외",
           ],
       )
+
+    st.markdown("**생년월일 (년 · 월 · 일)**")
+    current_year = datetime.datetime.now().year  # 2026년
+    # 2026년부터 100세 어르신(1925년생)까지 101개년 전수 선택 지원!
+    year_options = [
+        f"{y}년" for y in range(current_year, current_year - 101, -1)
+    ]
+    month_options = [f"{m}월" for m in range(1, 13)]
+    day_options = [f"{d}일" for d in range(1, 32)]
+
+    c_y, c_m, c_d = st.columns()
+    with c_y:
+      selected_year = st.selectbox(
+          "출생년도",
+          year_options,
+          index=year_options.index("1990년"),
+          label_visibility="collapsed",
+      )
+    with c_m:
+      selected_month = st.selectbox(
+          "출생월", month_options, index=0, label_visibility="collapsed"
+      )
+    with c_d:
+      selected_day = st.selectbox(
+          "출생일", day_options, index=0, label_visibility="collapsed"
+      )
+
+    y_val = int(selected_year.replace("년", ""))
+    m_val = int(selected_month.replace("월", ""))
+    d_val = int(selected_day.replace("일", ""))
+    try:
+      birth_date = datetime.date(y_val, m_val, d_val)
+    except ValueError:
+      last_day = calendar.monthrange(y_val, m_val)
+      birth_date = datetime.date(y_val, m_val, min(d_val, last_day))
 
     time_unknown = st.checkbox("태어난 시간 모름 선택")
     if not time_unknown:
@@ -326,6 +352,7 @@ if app_mode == "📝 사주 상담 신청서 (고객용)":
       st.caption("시간을 모르실 경우 년·월·일(삼주)을 기반으로 정밀 풀이됩니다.")
       time_final = "모름 (시간미상)"
 
+    # 3. 연락처 정보
     st.markdown(
         '<div class="section-title">📱 연락처 정보 (보고서 수신용) <span'
         ' style="font-size:12px;color:#dc2626;font-weight:normal;">* 필수'
@@ -338,6 +365,7 @@ if app_mode == "📝 사주 상담 신청서 (고객용)":
     )
     email = st.text_input("✉️ 이메일 주소 (선택)", placeholder="example@naver.com")
 
+    # 4. 상담 고민
     st.markdown(
         '<div class="section-title">💬 상담 고민 및 집중 질문 (선택)</div>',
         unsafe_allow_html=True,
@@ -357,7 +385,7 @@ if app_mode == "📝 사주 상담 신청서 (고객용)":
     )
     st.markdown("<br>", unsafe_allow_html=True)
     if st.button(
-        "🔮 사주 심층 상담 신청하기", type="primary", use_container_width=True
+        "🔮 사주풀이 신청하기", type="primary", use_container_width=True
     ):
       if not name.strip():
         st.error("성명을 입력해 주세요!")
