@@ -14,6 +14,7 @@ import calendar
 import time
 import os
 import re
+import tempfile
 
 # 기존 사주 엔진 모듈
 from dabdab_saju_app import (
@@ -502,25 +503,38 @@ else:
 
                                 status_box.write("4️⃣ PDF 파일 렌더링 중...")
                                 now = datetime.datetime.now()
-                                pdf_filename = f"{c_name}_{clean_phone}.pdf" if clean_phone else f"{c_name}_{now.strftime('%Y%m%d%H%M')}.pdf"
+                                # Streamlit Cloud 호환성: 임시 디렉토리 사용
+                                temp_dir = tempfile.gettempdir()
+                                # 파일명은 숫자와 영문만 사용 (인코딩 문제 방지)
+                                pdf_basename = f"saju_{clean_phone}_{now.strftime('%Y%m%d%H%M%S')}.pdf" if clean_phone else f"saju_{now.strftime('%Y%m%d%H%M%S')}.pdf"
+                                pdf_filename = os.path.join(temp_dir, pdf_basename)
 
                                 pdf_ok = render_saju_report_pdf(saju_data, report_md, pdf_filename)
                                 if not pdf_ok:
                                     raise RuntimeError("PDF 렌더링에 실패했습니다.")
 
+                                if not os.path.exists(pdf_filename):
+                                    raise RuntimeError(f"PDF 파일이 생성되지 않았습니다: {pdf_filename}")
+
                                 status_box.write("5️⃣ 구글 드라이브 업로드 중...")
                                 upload_res = gdrive_uploader.upload_pdf_to_date_folder(
                                     file_content=pdf_filename,
-                                    filename=pdf_filename,
+                                    filename=f"{c_name}_{clean_phone}.pdf" if clean_phone else f"{c_name}_{now.strftime('%Y%m%d')}.pdf",
                                     date_obj=now,
                                     contact_info=contact_info
                                 )
+
+                                # 업로드 결과 검증
+                                if not upload_res or not upload_res.get('id'):
+                                    raise RuntimeError(f"구글 드라이브 업로드 실패: {upload_res}")
 
                                 if os.path.exists(pdf_filename):
                                     os.remove(pdf_filename)
 
                                 status_box.write("6️⃣ 카카오 알림톡 3시간 뒤 자동 예약 등록 중...")
                                 file_id = upload_res.get("id", "")
+                                if not file_id:
+                                    raise RuntimeError("구글 드라이브 업로드에서 파일 ID를 받지 못했습니다.")
                                 if clean_phone and file_id:
                                     schedule_saju_alimtalk_3hours_later(c_name, clean_phone, file_id)
 
