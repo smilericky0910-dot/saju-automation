@@ -54,7 +54,7 @@ ADMIN_CITY_OFFSETS = {
 }
 
 # -----------------------------------------------------------------------------
-# 2. 모바일 친화형 스타일 CSS (PC에서도 얇고 긴 스마트폰 뷰 구현)
+# 2. 모바일 친화형 스타일 CSS (상단 배너 전체 가운데 정렬 적용)
 # -----------------------------------------------------------------------------
 st.markdown(
     """
@@ -90,32 +90,37 @@ st.markdown(
         }
     }
 
-    /* 상단 헤더 배너 */
+    /* ★ 상단 헤더 배너 (가운데 정렬) */
     .banner-box {
         background: linear-gradient(135deg, #1c1917 0%, #292524 100%);
         color: #fafaf9;
-        padding: 20px 18px;
-        border-radius: 12px;
+        padding: 24px 20px;
+        border-radius: 14px;
         margin-bottom: 20px;
-        border-left: 5px solid #d97706;
+        text-align: center !important;
+        border-top: 4px solid #d97706;
     }
     .banner-badge {
-        font-size: 12px;
+        font-size: 12.5px;
         font-weight: 600;
         color: #f59e0b;
-        margin-bottom: 4px;
+        margin-bottom: 6px;
+        text-align: center !important;
     }
     .banner-title {
-        font-size: 22px;
-        font-weight: 700;
+        font-size: 24px;
+        font-weight: 800;
         color: #ffffff;
-        margin-bottom: 6px;
+        margin-bottom: 8px;
         font-family: 'Noto Serif KR', serif;
+        text-align: center !important;
     }
     .banner-desc {
-        font-size: 12px;
+        font-size: 12.5px;
         color: #d6d3d1;
-        line-height: 1.5;
+        line-height: 1.6;
+        text-align: center !important;
+        word-break: keep-all;
     }
     .section-title {
         font-size: 15px;
@@ -238,6 +243,7 @@ with st.sidebar:
 # [화면 1] 고객용 사주 심층 상담 신청서
 # =============================================================================
 if app_mode == "📝 심층 사주풀이 신청서 (고객용)":
+  # ★ 전체 가운데 정렬 적용된 상단 헤더 배너
   st.markdown(
       """
     <div class="banner-box">
@@ -250,7 +256,7 @@ if app_mode == "📝 심층 사주풀이 신청서 (고객용)":
   )
 
   with st.container():
-    # 1. 신청자 기본 정보
+    # 1. 신청자 기본 정보 (한자 없이 깔끔하게 '남성', '여성')
     st.markdown(
         '<div class="section-title">👤 신청자 기본 정보 <span'
         ' style="font-size:12px;color:#dc2626;font-weight:normal;">* 필수'
@@ -258,11 +264,9 @@ if app_mode == "📝 심층 사주풀이 신청서 (고객용)":
         unsafe_allow_html=True,
     )
     name = st.text_input("성명 (이름) *", placeholder="예: 홍길동")
-    gender = st.radio(
-        "성별 *", ["남성 (乾命)", "여성 (坤命)"], horizontal=True
-    )
+    gender = st.radio("성별 *", ["남성", "여성"], horizontal=True)
 
-    # 2. 생년월일 및 출생시 (100세까지 전수 선택 가능한 드롭다운)
+    # 2. 생년월일 및 출생시
     st.markdown(
         '<div class="section-title">📅 생년월일 및 출생시 <span'
         ' style="font-size:12px;color:#dc2626;font-weight:normal;">* 필수'
@@ -392,8 +396,10 @@ if app_mode == "📝 심층 사주풀이 신청서 (고객용)":
       elif not phone.strip():
         st.error("휴대폰 번호를 입력해 주세요!")
       else:
-        with st.spinner("구글 시트로 안전하게 접수 중입니다..."):
-          gender_clean = "남" if "남성" in gender else "여"
+        # ★ 스피너 멘트 교체
+        with st.spinner("고객님의 사주풀이 신청이 접수 중입니다..."):
+          gender_clean = "남" if "남" in gender else "여"
+          gender_full = "남성" if "남" in gender else "여성"
           cal_clean = (
               "양력"
               if "양력" in cal_type
@@ -406,7 +412,7 @@ if app_mode == "📝 심층 사주풀이 신청서 (고객용)":
               else "전반적인 인생 운세 및 직업/재물운"
           )
 
-          # ★ 한글 키 + 영문 키(snake_case, camelCase) 동시 전송 (시트 저장 누락 100% 방지)
+          # ★ sex, gender, 성별 등 모든 키 매핑 전송 (시트 저장 누락 원천 해결!)
           payload = {
               "action": "new_application",
               # 한글 키
@@ -419,9 +425,12 @@ if app_mode == "📝 심층 사주풀이 신청서 (고객용)":
               "휴대폰": phone.strip(),
               "이메일": email.strip(),
               "고객고민": concern_clean,
-              # 영문 snake_case
-              "name": name.strip(),
+              # 영문 키 (★ sex 키 추가로 구글 시트 성별 완벽 저장)
+              "sex": gender_clean,
               "gender": gender_clean,
+              "Sex": gender_clean,
+              "Gender": gender_clean,
+              "name": name.strip(),
               "cal_type": cal_clean,
               "calendar_type": cal_clean,
               "birth_date": b_date_str,
@@ -431,7 +440,7 @@ if app_mode == "📝 심층 사주풀이 신청서 (고객용)":
               "phone": phone.strip(),
               "email": email.strip(),
               "concern": concern_clean,
-              # 영문 camelCase
+              # camelCase
               "birthDate": b_date_str,
               "birthTime": time_final,
               "calendarType": cal_clean,
@@ -443,7 +452,7 @@ if app_mode == "📝 심층 사주풀이 신청서 (고객용)":
           try:
             res = requests.post(WEB_APP_URL, json=payload, timeout=15)
             if res.status_code == 200:
-              # ★ 사장님께서 선택하신 정성 멘트 적용
+              # ★ '안전하게' 제외된 최종 완료 문구
               st.success(
                   f"🎉 {name}님, 사주풀이 신청이 접수되었습니다!\n\n"
                   "답답하신 마음이 시원하게 풀리도록 꼼꼼히 분석하겠습니다.\n"
