@@ -238,7 +238,6 @@ with st.sidebar:
 # [화면 1] 고객용 사주 심층 상담 신청서
 # =============================================================================
 if app_mode == "📝 심층 사주풀이 신청서 (고객용)":
-  # ★ 요청하신 상단 헤더 문구 적용 완료
   st.markdown(
       """
     <div class="banner-box">
@@ -263,7 +262,7 @@ if app_mode == "📝 심층 사주풀이 신청서 (고객용)":
         "성별 *", ["남성 (乾命)", "여성 (坤命)"], horizontal=True
     )
 
-    # 2. 생년월일 및 출생시 (100세까지 전수 선택 가능한 드롭다운 적용)
+    # 2. 생년월일 및 출생시 (100세까지 전수 선택 가능한 드롭다운)
     st.markdown(
         '<div class="section-title">📅 생년월일 및 출생시 <span'
         ' style="font-size:12px;color:#dc2626;font-weight:normal;">* 필수'
@@ -384,7 +383,7 @@ if app_mode == "📝 심층 사주풀이 신청서 (고객용)":
         " 사용됩니다."
     )
     st.markdown("<br>", unsafe_allow_html=True)
-    # ★ '사주풀이 신청하기' 버튼 문구 반영
+
     if st.button(
         "🔮 사주풀이 신청하기", type="primary", use_container_width=True
     ):
@@ -400,29 +399,57 @@ if app_mode == "📝 심층 사주풀이 신청서 (고객용)":
               if "양력" in cal_type
               else ("음력(윤달)" if "윤달" in cal_type else "음력")
           )
+          b_date_str = birth_date.strftime("%Y-%m-%d")
+          concern_clean = (
+              concern.strip()
+              if concern.strip()
+              else "전반적인 인생 운세 및 직업/재물운"
+          )
 
+          # ★ 한글 키 + 영문 키(snake_case, camelCase) 동시 전송 (시트 저장 누락 100% 방지)
           payload = {
               "action": "new_application",
+              # 한글 키
               "이름": name.strip(),
               "성별": gender_clean,
               "양음력": cal_clean,
-              "생년월일": birth_date.strftime("%Y-%m-%d"),
+              "생년월일": b_date_str,
               "태어난시간": time_final,
               "출생도시": city,
               "휴대폰": phone.strip(),
               "이메일": email.strip(),
-              "고객고민": (
-                  concern.strip()
-                  if concern.strip()
-                  else "전반적인 인생 운세 및 직업/재물운"
-              ),
+              "고객고민": concern_clean,
+              # 영문 snake_case
+              "name": name.strip(),
+              "gender": gender_clean,
+              "cal_type": cal_clean,
+              "calendar_type": cal_clean,
+              "birth_date": b_date_str,
+              "birth_time": time_final,
+              "time": time_final,
+              "city": city,
+              "phone": phone.strip(),
+              "email": email.strip(),
+              "concern": concern_clean,
+              # 영문 camelCase
+              "birthDate": b_date_str,
+              "birthTime": time_final,
+              "calendarType": cal_clean,
+              "calType": cal_clean,
+              "customerName": name.strip(),
+              "phoneNumber": phone.strip(),
           }
+
           try:
             res = requests.post(WEB_APP_URL, json=payload, timeout=15)
             if res.status_code == 200:
+              # ★ 사장님께서 선택하신 정성 멘트 적용
               st.success(
-                  f"🎉 {name}님, 사주풀이 접수가 완료되었습니다! 확인 후 정밀 감정서가"
-                  " 카카오톡으로 발송됩니다."
+                  f"🎉 {name}님, 사주풀이 신청이 접수되었습니다!\n\n"
+                  "답답하신 마음이 시원하게 풀리도록 꼼꼼히 분석하겠습니다.\n"
+                  "약 3~6시간 후 접수 순서에 따라 등록하신 휴대폰 카톡으로 발송해"
+                  " 드리겠습니다.\n\n"
+                  "편히 기다려 주시면 정성 가득한 해답지로 찾아뵙겠습니다. 😄"
               )
               st.balloons()
             else:
