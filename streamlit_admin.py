@@ -410,9 +410,45 @@ else:
         if not raw_data:
             st.info("현재 구글 시트에 접수 데이터가 없습니다.")
         else:
-            st.caption(f"현재 시트에 총 **{len(raw_data)}명**의 고객이 있습니다.")
+            # 상태별 통계
+            waiting_count = sum(1 for row in raw_data if clean_val(row.get("처리상태"), "대기중") == "대기중")
+            completed_count = len(raw_data) - waiting_count
 
-            for idx, row in enumerate(raw_data):
+            # 요약 카드 (3단 레이아웃)
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("📋 총 신청", len(raw_data))
+            with col2:
+                st.metric("⏳ 입금대기", waiting_count)
+            with col3:
+                st.metric("✅ 완료", completed_count)
+
+            st.divider()
+
+            # 필터 옵션
+            col_filter_left, col_filter_right = st.columns(2)
+            with col_filter_left:
+                filter_status = st.radio("필터", ["전체", "입금대기만", "완료만"], horizontal=True, label_visibility="collapsed")
+            with col_filter_right:
+                sort_order = st.selectbox("정렬", ["최신순", "이름순"])
+
+            # 필터 적용
+            filtered_data = raw_data.copy()
+            if filter_status == "입금대기만":
+                filtered_data = [row for row in filtered_data if clean_val(row.get("처리상태"), "대기중") == "대기중"]
+            elif filter_status == "완료만":
+                filtered_data = [row for row in filtered_data if clean_val(row.get("처리상태"), "대기중") != "대기중"]
+
+            # 정렬
+            if sort_order == "이름순":
+                filtered_data = sorted(filtered_data, key=lambda x: str(clean_val(x.get("이름"), "")))
+            else:
+                filtered_data = sorted(filtered_data, key=lambda x: str(clean_val(x.get("접수일시"), "")), reverse=True)
+
+            st.caption(f"🔍 표시 중: **{len(filtered_data)}명**")
+            st.divider()
+
+            for idx, row in enumerate(filtered_data):
                 row_idx = row.get("row_index", idx + 2)
                 
                 # 시트의 11개 헤더를 정확하고 안전하게 가져오기
@@ -437,24 +473,33 @@ else:
                 email_display = f"<br/>• <strong>이메일:</strong> {c_email}" if (c_email and c_email != "-") else ""
 
                 with st.container():
+                    # 진행 단계 시각화
+                    status_icon = "🔵" if status == "대기중" else "🟢"
+
                     st.markdown(f"""
-                    <div style="background:#fcfcfc; border:1px solid #e2e2e8; border-radius:12px; padding:14px; margin-bottom:10px;">
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                            <span style="font-size:17px; font-weight:800; color:#18181b;">{c_name} 님</span>
-                            <span class='status-badge {badge_class}'>{status}</span>
+                    <div style="background:linear-gradient(135deg, #ffffff 0%, #f9f9fb 100%); border:1.5px solid #e4e4e8; border-radius:14px; padding:16px; margin-bottom:12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+                        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
+                            <div style="flex:1;">
+                                <div style="font-size:18px; font-weight:900; color:#1d2d44; margin-bottom:2px;">{status_icon} {c_name} 님</div>
+                                <div style="font-size:11px; color:#8c8c99;">접수: {c_created}</div>
+                            </div>
+                            <span class='status-badge {badge_class}' style="font-size:11px; padding:4px 10px;">{status}</span>
                         </div>
-                        <div style="font-size:12px; color:#52525b; line-height:1.7; margin-bottom:8px;">
-                            • <strong>접수일시:</strong> {c_created}<br/>
-                            • <strong>성별 / 구분:</strong> {c_sex} ({c_cal})<br/>
-                            • <strong>생년월일:</strong> {c_bdate} (<strong>시간:</strong> {c_btime})<br/>
-                            • <strong>출생도시:</strong> {c_city}<br/>
-                            • <strong>연락처:</strong> <strong>{c_phone}</strong>{email_display}
+
+                        <div style="font-size:12px; color:#52525b; line-height:1.8; margin-bottom:10px;">
+                            <div><strong>📋 기본정보</strong></div>
+                            성별: {c_sex} | 구분: {c_cal} | 생년월일: {c_bdate} ({c_btime})<br/>
+                            📍 {c_city} | 📞 {c_phone}{' | ✉️ ' + c_email if c_email and c_email != '-' else ''}
                         </div>
-                        <div style="font-size:12px; color:#27272a; background:#f4f4f5; padding:8px 10px; border-radius:6px; margin-bottom:12px;">
+
+                        <div style="font-size:11px; color:#27272a; background:#f0f0f3; padding:10px; border-radius:8px; margin-bottom:0; border-left:3px solid #a3344b;">
                             💬 <em>"{c_concern}"</em>
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
+
+                    # Step 1 & Step 2 버튼 (2열 배치)
+                    col_step1, col_step2 = st.columns(2, gap="small")
 
                     # Step 2: [📝 사주풀이 및 발송] 버튼
                     btn_label = "📝 사주풀이 및 발송 (PDF+알림톡)" if status == "대기중" else "🔄 리포트 재분석 (다시 생성하기)"
