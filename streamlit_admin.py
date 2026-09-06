@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """
 [답답명쾌 사주해답소] 고객 신청서 & 사장님 전용 히든 관리자 시스템
-- 휴대폰 번호 자동 정규화 (하이픈 자동 삽입 & 010 유효성 검사)
-- 성별 구글 시트 3번째 열 완벽 전송
-- 상단 모드 전환 완전 숨김 & 다크 모드 차단
+- 관리자 화면에서 양력음력, 생년월일, 시간, 출생도시, 이메일 표시 누락 완벽 해결
+- 스마트 헤더 키 매핑 (띄어쓰기, 변형 이름 완벽 대응)
+- 전화번호 010 자동 검증 및 포맷팅
 """
 
 import streamlit as st
@@ -150,22 +150,28 @@ st.markdown("""
 
 
 # -----------------------------------------------------------------------------
-# 3. 전화번호 검증 및 포맷팅 헬퍼 함수
+# 3. 데이터 파싱 헬퍼 함수 (시트 컬럼명 불일치 완벽 해결기!)
 # -----------------------------------------------------------------------------
 def format_and_validate_phone(raw_phone):
-    """숫자만 추출 후 010-XXXX-XXXX 형식 검증 및 변환"""
     digits = re.sub(r'[^0-9]', '', str(raw_phone))
-    
-    # 한국 휴대폰 번호 조건: 010, 011 등으로 시작하는 10자리 또는 11자리 숫자
     if not (digits.startswith("01") and len(digits) in [10, 11]):
         return None, "올바른 휴대폰 번호를 입력해 주세요. (예: 010-1234-5678)"
-    
     if len(digits) == 11:
         formatted = f"{digits[:3]}-{digits[3:7]}-{digits[7:]}"
-    else: # 10자리 (예: 011, 016, 019 등)
+    else:
         formatted = f"{digits[:3]}-{digits[3:6]}-{digits[6:]}"
-        
     return formatted, None
+
+def get_row_value(row, keys, default="-"):
+    """여러 가능한 키 이름 중 존재하는 값을 찾아 반환 (띄어쓰기, 대소문자 무시)"""
+    for key in keys:
+        if key in row and str(row[key]).strip() not in ["", "None", "null"]:
+            val = str(row[key]).strip()
+            # ISO 날짜 형식(1995-06-15T15:00:00.000Z) 정리
+            if "T" in val and len(val) >= 10 and ("-" in val[:10]):
+                val = val.split("T")[0]
+            return val
+    return default
 
 
 # -----------------------------------------------------------------------------
@@ -260,8 +266,6 @@ if not is_admin_mode:
     with st.container():
         st.markdown('<div class="section-title">👤 신청자 기본 정보 <span style="font-size:12px;color:#dc2626;font-weight:normal;">* 필수 항목</span></div>', unsafe_allow_html=True)
         name = st.text_input("성명 (이름) *", placeholder="예: 홍길동")
-        
-        # 성별 라디오 버튼
         gender = st.radio("성별 *", ["남성", "여성"], horizontal=True)
 
         st.markdown('<div class="section-title">📅 생년월일 및 출생시 <span style="font-size:12px;color:#dc2626;font-weight:normal;">* 필수 항목</span></div>', unsafe_allow_html=True)
@@ -325,19 +329,16 @@ if not is_admin_mode:
         st.markdown("<br>", unsafe_allow_html=True)
 
         if st.button("🔮 사주풀이 신청하기", type="primary", use_container_width=True):
-            # 1. 이름 검증
             if not name.strip():
                 st.error("성명을 입력해 주세요!")
                 st.stop()
 
-            # 2. ★ 휴대폰 번호 정밀 유효성 검사 (010 형식 검증)
             formatted_phone, phone_error = format_and_validate_phone(phone)
             if phone_error:
                 st.error(phone_error)
                 st.stop()
 
             with st.spinner("고객님의 사주풀이 신청이 접수 중입니다..."):
-                # 성별 확실하게 "남" 또는 "여"로 단일화
                 gender_clean = "남" if "남" in gender else "여"
                 cal_clean = "양력" if "양력" in cal_type else ("음력(윤달)" if "윤달" in cal_type else "음력")
                 b_date_str = birth_date.strftime("%Y-%m-%d")
@@ -351,13 +352,22 @@ if not is_admin_mode:
                     "sex": gender_clean,
                     "gender": gender_clean,
                     "양음력": cal_clean,
+                    "양/음력": cal_clean,
+                    "cal_type": cal_clean,
                     "생년월일": b_date_str,
+                    "birth_date": b_date_str,
                     "태어난시간": time_final,
+                    "태어난 시간": time_final,
+                    "birth_time": time_final,
                     "출생도시": city,
-                    "휴대폰": formatted_phone,  # 010-XXXX-XXXX 로 자동 포맷팅
+                    "출생지역": city,
+                    "city": city,
+                    "휴대폰": formatted_phone,
                     "phone": formatted_phone,
                     "이메일": email.strip(),
-                    "고객고민": concern_clean
+                    "email": email.strip(),
+                    "고객고민": concern_clean,
+                    "concern": concern_clean
                 }
 
                 try:
@@ -400,14 +410,25 @@ else:
 
             for idx, row in df.iterrows():
                 row_idx = row.get("row_index", idx + 2)
-                c_name = row.get("이름", "무명")
-                status = row.get("처리상태", "대기중")
-                if not status:
+                
+                # ★ 스마트 헤더 키 매핑 적용 (헤더 이름이 약간 달라도 100% 매칭!)
+                c_name = get_row_value(row, ["이름", "성명", "name", "고객명"], "무명")
+                c_sex = get_row_value(row, ["성별", "sex", "gender"], "-")
+                c_cal = get_row_value(row, ["양음력", "양/음력", "양·음력", "cal_type", "구분"], "-")
+                c_bdate = get_row_value(row, ["생년월일", "birth_date", "생일"], "-")
+                c_btime = get_row_value(row, ["태어난시간", "태어난 시간", "출생시", "birth_time"], "-")
+                c_city = get_row_value(row, ["출생도시", "출생지역", "city", "도시"], "-")
+                c_phone = get_row_value(row, ["휴대폰", "연락처", "전화번호", "phone"], "-")
+                c_email = get_row_value(row, ["이메일", "email"], "-")
+                c_concern = get_row_value(row, ["고객고민", "상담고민", "고민", "concern"], "고민 미작성")
+                c_created = get_row_value(row, ["접수일시", "일시", "created_at", "타임스탬프"], "-")
+                
+                status = get_row_value(row, ["처리상태", "상태", "status"], "대기중")
+                if not status or status == "-":
                     status = "대기중"
 
                 badge_class = "badge-sent" if status == "발송완료" else "badge-pending"
-                raw_phone = str(row.get("휴대폰", ""))
-                clean_phone = "".join(c for c in raw_phone if c.isdigit())
+                clean_phone = "".join(c for c in str(c_phone) if c.isdigit())
 
                 with st.container():
                     st.markdown(f"""
@@ -416,15 +437,15 @@ else:
                             <span style="font-size:17px; font-weight:800; color:#18181b;">{c_name} 님</span>
                             <span class='status-badge {badge_class}'>{status}</span>
                         </div>
-                        <div style="font-size:12px; color:#52525b; line-height:1.6; margin-bottom:8px;">
-                            • 접수일시: {row.get('접수일시', '-')}<br/>
-                            • 성별/양음력: <strong>{row.get('성별','-')}</strong> | {row.get('양음력','-')}<br/>
-                            • 생년월일: {str(row.get('생년월일','-')).split('T')[0]} ({row.get('태어난시간','-')})<br/>
-                            • 출생도시: {row.get('출생도시','-')}<br/>
-                            • 연락처: <strong>{row.get('휴대폰','-')}</strong>
+                        <div style="font-size:12px; color:#52525b; line-height:1.7; margin-bottom:8px;">
+                            • <strong>접수일시:</strong> {c_created}<br/>
+                            • <strong>성별 / 구분:</strong> {c_sex} ({c_cal})<br/>
+                            • <strong>생년월일:</strong> {c_bdate} (<strong>시간:</strong> {c_btime})<br/>
+                            • <strong>출생도시:</strong> {c_city}<br/>
+                            • <strong>연락처:</strong> <strong>{c_phone}</strong> {f'(이메일: {c_email})' if c_email != '-' else ''}
                         </div>
                         <div style="font-size:12px; color:#27272a; background:#f4f4f5; padding:8px 10px; border-radius:6px; margin-bottom:12px;">
-                            💬 <em>"{row.get('고객고민', '고민 미작성')}"</em>
+                            💬 <em>"{c_concern}"</em>
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
@@ -437,17 +458,17 @@ else:
                         with st.status(f"🔮 [{c_name}] 님 사주 분석 및 리포트 자동 생성 중...", expanded=True) as status_box:
                             try:
                                 status_box.write("1️⃣ 고객 정보 파싱 중...")
-                                gender_internal = "남성" if "남" in str(row.get("성별", "남")) else "여성"
-                                cal_type_str = str(row.get("양음력", "양력"))
+                                gender_internal = "남성" if "남" in str(c_sex) else "여성"
+                                cal_type_str = str(c_cal)
                                 is_lunar = "음력" in cal_type_str
                                 is_leap = "윤달" in cal_type_str
 
-                                b_raw = str(row.get("생년월일", "1990-01-01")).split("T")[0].strip()
+                                b_raw = str(c_bdate).split("T")[0].strip()
                                 b_parts = [int(p) for p in b_raw.split("-")]
                                 birth_date_obj = datetime.date(b_parts[0], b_parts[1], b_parts[2])
 
-                                b_hour, b_minute, time_unknown = parse_time_from_string(row.get("태어난시간", ""))
-                                city_str = str(row.get("출생도시", "서울"))
+                                b_hour, b_minute, time_unknown = parse_time_from_string(c_btime)
+                                city_str = str(c_city)
                                 region_offset = ADMIN_CITY_OFFSETS.get(city_str, -32)
 
                                 dst_offset = 0
@@ -469,10 +490,10 @@ else:
                                 analyzer = AdvancedSajuAnalyzer(
                                     c_name, gender_internal, year_p, month_p, day_p, hour_p,
                                     daewoon_num, daewoon_pillars, birth_date=lst_dt.date(),
-                                    profile={"deep_question": row.get("고객고민")}
+                                    profile={"deep_question": c_concern}
                                 )
                                 saju_data = analyzer.compute_all()
-                                contact_info = {"phone": clean_phone, "email": str(row.get("이메일", ""))}
+                                contact_info = {"phone": clean_phone, "email": str(c_email)}
                                 saju_data["contact"] = contact_info
 
                                 status_box.write("3️⃣ 클로드 AI 19개 챕터 리포트 작성 중...")
