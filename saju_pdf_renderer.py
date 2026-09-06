@@ -527,8 +527,20 @@ def build_report_html(saju_data: Dict[str, Any], report_markdown: str) -> str:
     return "\n".join(html)
 
 def convert_html_to_pdf(html_content: str, output_pdf_path: str) -> bool:
-    temp_html_path = output_pdf_path.replace('.pdf', '_temp.html')
-    with open(temp_html_path, 'w', encoding='utf-8') as f: f.write(html_content)
+    import tempfile
+    # 현재 디렉토리가 쓰기 불가능할 수 있으므로 임시 디렉토리 사용
+    temp_dir = tempfile.gettempdir()
+    temp_html_filename = os.path.basename(output_pdf_path).replace('.pdf', '_temp.html')
+    temp_html_path = os.path.join(temp_dir, temp_html_filename)
+
+    try:
+        with open(temp_html_path, 'w', encoding='utf-8') as f:
+            f.write(html_content)
+    except Exception as e:
+        print(f"❌ 임시 HTML 파일 저장 실패: {e}")
+        return False
+
+    errors = []
 
     try:
         from playwright.sync_api import sync_playwright
@@ -542,7 +554,10 @@ def convert_html_to_pdf(html_content: str, output_pdf_path: str) -> bool:
         if os.path.exists(output_pdf_path) and os.path.getsize(output_pdf_path) > 1000:
             if os.path.exists(temp_html_path): os.remove(temp_html_path)
             return True
-    except Exception: pass
+        else:
+            errors.append(f"Playwright: 파일 생성 실패 (크기: {os.path.getsize(output_pdf_path) if os.path.exists(output_pdf_path) else 0})")
+    except Exception as e:
+        errors.append(f"Playwright: {str(e)}")
 
     try:
         from weasyprint import HTML
@@ -550,7 +565,10 @@ def convert_html_to_pdf(html_content: str, output_pdf_path: str) -> bool:
         if os.path.exists(output_pdf_path) and os.path.getsize(output_pdf_path) > 1000:
             if os.path.exists(temp_html_path): os.remove(temp_html_path)
             return True
-    except Exception: pass
+        else:
+            errors.append(f"WeasyPrint: 파일 생성 실패 (크기: {os.path.getsize(output_pdf_path) if os.path.exists(output_pdf_path) else 0})")
+    except Exception as e:
+        errors.append(f"WeasyPrint: {str(e)}")
 
     for exe in [
         r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
@@ -566,7 +584,13 @@ def convert_html_to_pdf(html_content: str, output_pdf_path: str) -> bool:
                 if os.path.exists(output_pdf_path) and os.path.getsize(output_pdf_path) > 1000:
                     if os.path.exists(temp_html_path): os.remove(temp_html_path)
                     return True
-            except Exception: continue
+                else:
+                    errors.append(f"{exe}: 파일 생성 실패")
+            except Exception as e:
+                errors.append(f"{exe}: {str(e)}")
+
+    print(f"❌ PDF 렌더링 모두 실패:\n" + "\n".join(errors))
+    if os.path.exists(temp_html_path): os.remove(temp_html_path)
     return False
 
 def render_saju_report_pdf(saju_data: Dict[str, Any], report_markdown: str, output_pdf_path: str) -> bool:

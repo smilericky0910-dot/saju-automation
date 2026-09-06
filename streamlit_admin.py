@@ -14,6 +14,7 @@ import calendar
 import time
 import os
 import re
+import tempfile
 
 # 기존 사주 엔진 모듈
 from dabdab_saju_app import (
@@ -251,6 +252,10 @@ def parse_time_from_string(time_str):
 query_params = st.query_params if hasattr(st, "query_params") else st.experimental_get_query_params()
 is_admin_mode = str(query_params.get("admin", "")).lower() in ["true", "1", "yes"]
 
+# Session state: cache saju analysis data
+if "saju_analysis_cache" not in st.session_state:
+    st.session_state.saju_analysis_cache = {}
+
 
 # =============================================================================
 # [화면 1] 손님용 심층 사주풀이 신청서
@@ -405,9 +410,45 @@ else:
         if not raw_data:
             st.info("현재 구글 시트에 접수 데이터가 없습니다.")
         else:
-            st.caption(f"현재 시트에 총 **{len(raw_data)}명**의 고객이 있습니다.")
+            # 상태별 통계
+            waiting_count = sum(1 for row in raw_data if clean_val(row.get("처리상태"), "대기중") == "대기중")
+            completed_count = len(raw_data) - waiting_count
 
-            for idx, row in enumerate(raw_data):
+            # 요약 카드 (3단 레이아웃)
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("📋 총 신청", len(raw_data))
+            with col2:
+                st.metric("⏳ 입금대기", waiting_count)
+            with col3:
+                st.metric("✅ 완료", completed_count)
+
+            st.divider()
+
+            # 필터 옵션
+            col_filter_left, col_filter_right = st.columns(2)
+            with col_filter_left:
+                filter_status = st.radio("필터", ["전체", "입금대기만", "완료만"], horizontal=True, label_visibility="collapsed")
+            with col_filter_right:
+                sort_order = st.selectbox("정렬", ["최신순", "이름순"])
+
+            # 필터 적용
+            filtered_data = raw_data.copy()
+            if filter_status == "입금대기만":
+                filtered_data = [row for row in filtered_data if clean_val(row.get("처리상태"), "대기중") == "대기중"]
+            elif filter_status == "완료만":
+                filtered_data = [row for row in filtered_data if clean_val(row.get("처리상태"), "대기중") != "대기중"]
+
+            # 정렬
+            if sort_order == "이름순":
+                filtered_data = sorted(filtered_data, key=lambda x: str(clean_val(x.get("이름"), "")))
+            else:
+                filtered_data = sorted(filtered_data, key=lambda x: str(clean_val(x.get("접수일시"), "")), reverse=True)
+
+            st.caption(f"🔍 표시 중: **{len(filtered_data)}명**")
+            st.divider()
+
+            for idx, row in enumerate(filtered_data):
                 row_idx = row.get("row_index", idx + 2)
                 
                 # 시트의 11개 헤더를 정확하고 안전하게 가져오기
@@ -432,33 +473,51 @@ else:
                 email_display = f"<br/>• <strong>이메일:</strong> {c_email}" if (c_email and c_email != "-") else ""
 
                 with st.container():
+                    # 진행 단계 시각화
+                    status_icon = "🔵" if status == "대기중" else "🟢"
+
                     st.markdown(f"""
-                    <div style="background:#fcfcfc; border:1px solid #e2e2e8; border-radius:12px; padding:14px; margin-bottom:10px;">
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                            <span style="font-size:17px; font-weight:800; color:#18181b;">{c_name} 님</span>
-                            <span class='status-badge {badge_class}'>{status}</span>
+                    <div style="background:linear-gradient(135deg, #ffffff 0%, #f9f9fb 100%); border:1.5px solid #e4e4e8; border-radius:14px; padding:16px; margin-bottom:12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+                        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
+                            <div style="flex:1;">
+                                <div style="font-size:18px; font-weight:900; color:#1d2d44; margin-bottom:2px;">{status_icon} {c_name} 님</div>
+                                <div style="font-size:11px; color:#8c8c99;">접수: {c_created}</div>
+                            </div>
+                            <span class='status-badge {badge_class}' style="font-size:11px; padding:4px 10px;">{status}</span>
                         </div>
-                        <div style="font-size:12px; color:#52525b; line-height:1.7; margin-bottom:8px;">
-                            • <strong>접수일시:</strong> {c_created}<br/>
-                            • <strong>성별 / 구분:</strong> {c_sex} ({c_cal})<br/>
-                            • <strong>생년월일:</strong> {c_bdate} (<strong>시간:</strong> {c_btime})<br/>
-                            • <strong>출생도시:</strong> {c_city}<br/>
-                            • <strong>연락처:</strong> <strong>{c_phone}</strong>{email_display}
+
+                        <div style="font-size:12px; color:#52525b; line-height:1.8; margin-bottom:10px;">
+                            <div><strong>📋 기본정보</strong></div>
+                            성별: {c_sex} | 구분: {c_cal} | 생년월일: {c_bdate} ({c_btime})<br/>
+                            📍 {c_city} | 📞 {c_phone}{' | ✉️ ' + c_email if c_email and c_email != '-' else ''}
                         </div>
-                        <div style="font-size:12px; color:#27272a; background:#f4f4f5; padding:8px 10px; border-radius:6px; margin-bottom:12px;">
+
+                        <div style="font-size:11px; color:#27272a; background:#f0f0f3; padding:10px; border-radius:8px; margin-bottom:0; border-left:3px solid #a3344b;">
                             💬 <em>"{c_concern}"</em>
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
 
-                    # 1. [사주 분석 시작] 버튼
-                    btn_label = "⚡ 사주 분석 시작 (원클릭 자동생성)" if status == "대기중" else "🔄 리포트 재분석 (다시 생성하기)"
+                    # Step 1 & Step 2 버튼 (2열 배치)
+                    col_step1, col_step2 = st.columns(2, gap="small")
+
+                    # Step 2: [📝 사주풀이 및 발송] 버튼
+                    btn_label = "📝 사주풀이 및 발송 (PDF+알림톡)" if status == "대기중" else "🔄 리포트 재분석 (다시 생성하기)"
                     btn_color = "primary" if status == "대기중" else "secondary"
 
                     if st.button(btn_label, key=f"btn_run_{row_idx}", type=btn_color, use_container_width=True):
                         with st.status(f"🔮 [{c_name}] 님 사주 분석 및 리포트 자동 생성 중...", expanded=True) as status_box:
                             try:
-                                status_box.write("1️⃣ 고객 정보 파싱 중...")
+                                status_box.write("1️⃣ 고객 정보 검증 중...")
+                                # 필수 정보 확인
+                                if c_bdate == "-" or not c_bdate or "T" not in str(c_bdate):
+                                    raise ValueError(f"생년월일 정보 누락 또는 형식 오류: {c_bdate}")
+                                if c_sex == "-" or not c_sex:
+                                    raise ValueError(f"성별 정보 누락: {c_sex}")
+                                if c_cal == "-" or not c_cal:
+                                    raise ValueError(f"양음력 구분 정보 누락: {c_cal}")
+
+                                status_box.write("2️⃣ 고객 정보 파싱 중...")
                                 gender_internal = "남성" if "남" in str(c_sex) else "여성"
                                 cal_type_str = str(c_cal)
                                 is_lunar = "음력" in cal_type_str
@@ -497,34 +556,47 @@ else:
                                 contact_info = {"phone": clean_phone, "email": str(c_email)}
                                 saju_data["contact"] = contact_info
 
-                                status_box.write("3️⃣ 클로드 AI 19개 챕터 리포트 작성 중...")
+                                status_box.write("4️⃣ 클로드 AI 19개 챕터 리포트 작성 중...")
                                 report_md = generate_saju_report(saju_data)
 
-                                status_box.write("4️⃣ PDF 파일 렌더링 중...")
+                                status_box.write("5️⃣ PDF 파일 렌더링 중...")
                                 now = datetime.datetime.now()
-                                pdf_filename = f"{c_name}_{clean_phone}.pdf" if clean_phone else f"{c_name}_{now.strftime('%Y%m%d%H%M')}.pdf"
+                                # Streamlit Cloud 호환성: 임시 디렉토리 사용
+                                temp_dir = tempfile.gettempdir()
+                                # 파일명은 숫자와 영문만 사용 (인코딩 문제 방지)
+                                pdf_basename = f"saju_{clean_phone}_{now.strftime('%Y%m%d%H%M%S')}.pdf" if clean_phone else f"saju_{now.strftime('%Y%m%d%H%M%S')}.pdf"
+                                pdf_filename = os.path.join(temp_dir, pdf_basename)
 
                                 pdf_ok = render_saju_report_pdf(saju_data, report_md, pdf_filename)
                                 if not pdf_ok:
                                     raise RuntimeError("PDF 렌더링에 실패했습니다.")
 
-                                status_box.write("5️⃣ 구글 드라이브 업로드 중...")
+                                if not os.path.exists(pdf_filename):
+                                    raise RuntimeError(f"PDF 파일이 생성되지 않았습니다: {pdf_filename}")
+
+                                status_box.write("6️⃣ 구글 드라이브 업로드 중...")
                                 upload_res = gdrive_uploader.upload_pdf_to_date_folder(
                                     file_content=pdf_filename,
-                                    filename=pdf_filename,
+                                    filename=f"{c_name}_{clean_phone}.pdf" if clean_phone else f"{c_name}_{now.strftime('%Y%m%d')}.pdf",
                                     date_obj=now,
                                     contact_info=contact_info
                                 )
 
+                                # 업로드 결과 검증
+                                if not upload_res or not upload_res.get('id'):
+                                    raise RuntimeError(f"구글 드라이브 업로드 실패: {upload_res}")
+
                                 if os.path.exists(pdf_filename):
                                     os.remove(pdf_filename)
 
-                                status_box.write("6️⃣ 카카오 알림톡 3시간 뒤 자동 예약 등록 중...")
+                                status_box.write("7️⃣ 카카오 알림톡 3시간 뒤 자동 예약 등록 중...")
                                 file_id = upload_res.get("id", "")
+                                if not file_id:
+                                    raise RuntimeError("구글 드라이브 업로드에서 파일 ID를 받지 못했습니다.")
                                 if clean_phone and file_id:
                                     schedule_saju_alimtalk_3hours_later(c_name, clean_phone, file_id)
 
-                                status_box.write("7️⃣ 시트 상태를 '발송완료'로 업데이트 중...")
+                                status_box.write("8️⃣ 시트 상태를 '발송완료'로 업데이트 중...")
                                 update_status_in_sheet(row_idx, "발송완료", c_name, clean_phone)
 
                                 status_box.update(label=f"✅ [{c_name}] 님 사주 분석 및 알림톡 발송 완료!", state="complete")
@@ -558,6 +630,74 @@ else:
                                     st.rerun()
                                 else:
                                     st.error("삭제 실패")
+
+                    # Step 1: [📊 사주분석] 버튼 - 사주분석엔진으로 고객정보 분석
+                    if st.button("📊 사주분석 (만세력 생성)", key=f"btn_preview_{row_idx}", use_container_width=True):
+                        try:
+                            with st.spinner(f"[{c_name}] 님의 사주정보를 계산 중..."):
+                                # 고객정보 파싱
+                                gender_internal = "남성" if "남" in str(c_sex) else "여성"
+                                cal_type_str = str(c_cal)
+                                is_lunar = "음력" in cal_type_str
+                                is_leap = "윤달" in cal_type_str
+
+                                b_raw = str(c_bdate).split("T")[0].strip()
+                                b_parts = [int(p) for p in b_raw.split("-")]
+                                birth_date_obj = datetime.date(b_parts[0], b_parts[1], b_parts[2])
+
+                                b_hour, b_minute, time_unknown = parse_time_from_string(c_btime)
+                                city_str = str(c_city)
+                                region_offset = ADMIN_CITY_OFFSETS.get(city_str, -32)
+
+                                dst_offset = 0
+                                if not time_unknown and not is_lunar:
+                                    auto_dst = get_dst_offset_minutes(
+                                        birth_date_obj.year, birth_date_obj.month, birth_date_obj.day,
+                                        b_hour, b_minute
+                                    )
+                                    dst_offset = 60 if auto_dst > 0 else 0
+
+                                # [Step 1] 사주분석: 만세력 계산
+                                (year_p, month_p, day_p, hour_p,
+                                 daewoon_num, daewoon_pillars, is_forward, lst_dt) = convert_to_pillars(
+                                    birth_date_obj.year, birth_date_obj.month, birth_date_obj.day,
+                                    b_hour, b_minute, is_lunar, is_leap, gender_internal,
+                                    "표준 자시(기본)", region_offset, dst_offset
+                                )
+
+                                # 분석 데이터 생성
+                                analyzer = AdvancedSajuAnalyzer(
+                                    c_name, gender_internal, year_p, month_p, day_p, hour_p,
+                                    daewoon_num, daewoon_pillars, birth_date=lst_dt.date(),
+                                    profile={"deep_question": c_concern}
+                                )
+                                saju_data = analyzer.compute_all()
+
+                                # 세션에 캐시 저장
+                                cache_key = f"{row_idx}_{clean_phone}"
+                                st.session_state.saju_analysis_cache[cache_key] = {
+                                    "saju_data": saju_data,
+                                    "c_name": c_name,
+                                    "clean_phone": clean_phone,
+                                    "c_email": c_email,
+                                    "c_concern": c_concern
+                                }
+
+                                # 사주정보 표시
+                                st.success(f"✅ [{c_name}] 님 사주분석 완료!")
+                                st.markdown(f"""
+                                **📊 사주 원국 (만세력)**
+                                - **년주(年柱):** {year_p[0]}{year_p[1]}
+                                - **월주(月柱):** {month_p[0]}{month_p[1]}
+                                - **일주(日柱):** {day_p[0]}{day_p[1]}
+                                - **시주(時柱):** {hour_p[0]}{hour_p[1]} (시간 정보: {'있음' if not time_unknown else '모름'})
+                                - **기준 명식:** {lst_dt.strftime('%Y-%m-%d %H:%M')}
+                                - **대운수:** {daewoon_num}
+                                """)
+                                st.info("✓ Step 1 완료! 이제 아래의 '📝 사주풀이 및 발송' 버튼을 클릭하면 리포트가 생성되고 PDF가 발송됩니다.")
+
+                        except Exception as e:
+                            st.error(f"❌ 사주분석 실패: {e}")
 
                     st.markdown("---")
 
