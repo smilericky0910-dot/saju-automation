@@ -29,8 +29,8 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# 사장님의 구글 웹앱 URL (스프레드시트 연동)
-WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxFPVPgYvx3q-saacm0OkUuELMb-GomV5UDLTVUGRrSuzxDCQdXywyPePQqVhRxJz25Kw/exec"
+# 구글 앱스 스크립트 웹 앱 URL (secrets.toml에서 불러오기)
+WEB_APP_URL = st.secrets.get("GOOGLE_APPS_SCRIPT_URL", "")
 
 # 관리자 모드 기본 비밀번호
 ADMIN_PASSWORD = "1234"
