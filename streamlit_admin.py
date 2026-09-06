@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """
 [답답명쾌 사주해답소] 고객 신청서 & 사장님 전용 히든 관리자 시스템
-- 관리자 화면에서 양력음력, 생년월일, 시간, 출생도시, 이메일 표시 누락 완벽 해결
-- 스마트 헤더 키 매핑 (띄어쓰기, 변형 이름 완벽 대응)
-- 전화번호 010 자동 검증 및 포맷팅
+- 구글 시트 기존 11개 헤더와 100% 완벽 일치 매핑
+- 관리자 화면: 접수일시, 이름, 성별, 양음력, 생년월일, 태어난시간, 출생도시, 휴대폰, 이메일, 고민 누락 없이 모두 표시
+- 날짜(T00:00:00) 정제 및 010 번호 정규화
 """
 
 import streamlit as st
@@ -15,7 +15,7 @@ import time
 import os
 import re
 
-# 사장님 기존 사주 엔진 모듈
+# 기존 사주 엔진 모듈
 from dabdab_saju_app import (
     convert_to_pillars,
     AdvancedSajuAnalyzer,
@@ -28,7 +28,7 @@ import gdrive_uploader
 from saju_alimtalk import schedule_saju_alimtalk_3hours_later
 
 # -----------------------------------------------------------------------------
-# 1. 페이지 기본 설정
+# 1. 기본 설정
 # -----------------------------------------------------------------------------
 st.set_page_config(
     page_title="답답명쾌 사주해답소 | 심층 사주풀이",
@@ -47,7 +47,7 @@ ADMIN_CITY_OFFSETS = {
 }
 
 # -----------------------------------------------------------------------------
-# 2. 스타일 CSS (밝은 모드 강제 고정, 모바일 뷰)
+# 2. 스타일 CSS (밝은 모드 강제 고정, 모바일 480px)
 # -----------------------------------------------------------------------------
 st.markdown("""
 <style>
@@ -150,7 +150,7 @@ st.markdown("""
 
 
 # -----------------------------------------------------------------------------
-# 3. 데이터 파싱 헬퍼 함수 (시트 컬럼명 불일치 완벽 해결기!)
+# 3. 데이터 검증 및 헬퍼 함수
 # -----------------------------------------------------------------------------
 def format_and_validate_phone(raw_phone):
     digits = re.sub(r'[^0-9]', '', str(raw_phone))
@@ -162,16 +162,17 @@ def format_and_validate_phone(raw_phone):
         formatted = f"{digits[:3]}-{digits[3:6]}-{digits[6:]}"
     return formatted, None
 
-def get_row_value(row, keys, default="-"):
-    """여러 가능한 키 이름 중 존재하는 값을 찾아 반환 (띄어쓰기, 대소문자 무시)"""
-    for key in keys:
-        if key in row and str(row[key]).strip() not in ["", "None", "null"]:
-            val = str(row[key]).strip()
-            # ISO 날짜 형식(1995-06-15T15:00:00.000Z) 정리
-            if "T" in val and len(val) >= 10 and ("-" in val[:10]):
-                val = val.split("T")[0]
-            return val
-    return default
+def clean_val(val, default="-"):
+    """구글 시트의 빈 문자열, null, None, NaN 안전 정제"""
+    if val is None:
+        return default
+    s = str(val).strip()
+    if s == "" or s.lower() in ["none", "nan", "null"]:
+        return default
+    # ISO 날짜 형식(1989-12-31T15:00:00.000Z) 정리 -> 1989-12-31
+    if "T" in s and len(s) >= 10 and ("-" in s[:10]):
+        s = s.split("T")[0]
+    return s
 
 
 # -----------------------------------------------------------------------------
@@ -226,7 +227,7 @@ def delete_customer_from_sheet1(row_index, customer_name="", phone=""):
         return False
 
 def parse_time_from_string(time_str):
-    if not time_str or "모름" in str(time_str) or str(time_str).strip() == "-":
+    if not time_str or "모름" in str(time_str) or str(time_str).strip() in ["-", ""]:
         return None, 0, True
     s = str(time_str)
     time_map = {
@@ -271,7 +272,7 @@ if not is_admin_mode:
         st.markdown('<div class="section-title">📅 생년월일 및 출생시 <span style="font-size:12px;color:#dc2626;font-weight:normal;">* 필수 항목</span></div>', unsafe_allow_html=True)
         col_cal, col_city = st.columns(2)
         with col_cal:
-            cal_type = st.selectbox("양력 / 음력 구분 *", ["양력 (Solar)", "음력 (평달)", "음력 (윤달)"])
+            cal_type = st.selectbox("양력 / 음력 구분 *", ["양력", "음력(평달)", "음력(윤달)"])
         with col_city:
             city = st.selectbox("출생도시 *", ["서울", "경기/인천", "부산", "대구", "대전", "광주", "울산", "강원", "충청", "전라", "경상", "제주", "해외"])
 
@@ -344,29 +345,28 @@ if not is_admin_mode:
                 b_date_str = birth_date.strftime("%Y-%m-%d")
                 concern_clean = concern.strip() if concern.strip() else "전반적인 인생 운세 및 직업/재물운"
 
+                # 구글 시트 11개 헤더와 완벽하게 일치하는 payload
                 payload = {
                     "action": "new_application",
                     "이름": name.strip(),
                     "name": name.strip(),
                     "성별": gender_clean,
                     "sex": gender_clean,
-                    "gender": gender_clean,
                     "양음력": cal_clean,
-                    "양/음력": cal_clean,
+                    "calendar_type": cal_clean,
                     "cal_type": cal_clean,
                     "생년월일": b_date_str,
                     "birth_date": b_date_str,
                     "태어난시간": time_final,
-                    "태어난 시간": time_final,
                     "birth_time": time_final,
                     "출생도시": city,
-                    "출생지역": city,
                     "city": city,
                     "휴대폰": formatted_phone,
                     "phone": formatted_phone,
                     "이메일": email.strip(),
                     "email": email.strip(),
                     "고객고민": concern_clean,
+                    "deep_question": concern_clean,
                     "concern": concern_clean
                 }
 
@@ -396,39 +396,40 @@ else:
     if admin_pw == ADMIN_PASSWORD:
         st.success("관리자 모드가 활성화되었습니다.")
         
-        if st.button("🔄 시트1 최신 데이터 즉시 새로고침", use_container_width=True):
+        if st.button("🔄 시트 최신 데이터 새로고침", use_container_width=True):
             st.rerun()
 
-        with st.spinner("구글 스프레드시트1에서 접수 목록을 조회하는 중..."):
+        with st.spinner("구글 스프레드시트에서 접수 목록을 조회하는 중..."):
             raw_data = fetch_applicants()
 
         if not raw_data:
-            st.info("현재 시트1에 접수 데이터가 없습니다.")
+            st.info("현재 구글 시트에 접수 데이터가 없습니다.")
         else:
-            df = pd.DataFrame(raw_data)
-            st.caption(f"현재 시트1에 총 **{len(df)}명**의 고객이 있습니다.")
+            st.caption(f"현재 시트에 총 **{len(raw_data)}명**의 고객이 있습니다.")
 
-            for idx, row in df.iterrows():
+            for idx, row in enumerate(raw_data):
                 row_idx = row.get("row_index", idx + 2)
                 
-                # ★ 스마트 헤더 키 매핑 적용 (헤더 이름이 약간 달라도 100% 매칭!)
-                c_name = get_row_value(row, ["이름", "성명", "name", "고객명"], "무명")
-                c_sex = get_row_value(row, ["성별", "sex", "gender"], "-")
-                c_cal = get_row_value(row, ["양음력", "양/음력", "양·음력", "cal_type", "구분"], "-")
-                c_bdate = get_row_value(row, ["생년월일", "birth_date", "생일"], "-")
-                c_btime = get_row_value(row, ["태어난시간", "태어난 시간", "출생시", "birth_time"], "-")
-                c_city = get_row_value(row, ["출생도시", "출생지역", "city", "도시"], "-")
-                c_phone = get_row_value(row, ["휴대폰", "연락처", "전화번호", "phone"], "-")
-                c_email = get_row_value(row, ["이메일", "email"], "-")
-                c_concern = get_row_value(row, ["고객고민", "상담고민", "고민", "concern"], "고민 미작성")
-                c_created = get_row_value(row, ["접수일시", "일시", "created_at", "타임스탬프"], "-")
-                
-                status = get_row_value(row, ["처리상태", "상태", "status"], "대기중")
-                if not status or status == "-":
+                # 시트의 11개 헤더를 정확하고 안전하게 가져오기
+                c_name = clean_val(row.get("이름"), "무명")
+                c_sex = clean_val(row.get("성별"), "-")
+                c_cal = clean_val(row.get("양음력"), "-")
+                c_bdate = clean_val(row.get("생년월일"), "-")
+                c_btime = clean_val(row.get("태어난시간"), "-")
+                c_city = clean_val(row.get("출생도시"), "-")
+                c_phone = clean_val(row.get("휴대폰"), "-")
+                c_email = clean_val(row.get("이메일"), "")
+                c_concern = clean_val(row.get("고객고민"), "고민 미작성")
+                c_created = clean_val(row.get("접수일시"), "-")
+                status = clean_val(row.get("처리상태"), "대기중")
+                if status == "-":
                     status = "대기중"
 
                 badge_class = "badge-sent" if status == "발송완료" else "badge-pending"
                 clean_phone = "".join(c for c in str(c_phone) if c.isdigit())
+
+                # ★ 이메일 표시 줄 추가 & 모든 시트 정보 100% 노출
+                email_display = f"<br/>• <strong>이메일:</strong> {c_email}" if (c_email and c_email != "-") else ""
 
                 with st.container():
                     st.markdown(f"""
@@ -442,7 +443,7 @@ else:
                             • <strong>성별 / 구분:</strong> {c_sex} ({c_cal})<br/>
                             • <strong>생년월일:</strong> {c_bdate} (<strong>시간:</strong> {c_btime})<br/>
                             • <strong>출생도시:</strong> {c_city}<br/>
-                            • <strong>연락처:</strong> <strong>{c_phone}</strong> {f'(이메일: {c_email})' if c_email != '-' else ''}
+                            • <strong>연락처:</strong> <strong>{c_phone}</strong>{email_display}
                         </div>
                         <div style="font-size:12px; color:#27272a; background:#f4f4f5; padding:8px 10px; border-radius:6px; margin-bottom:12px;">
                             💬 <em>"{c_concern}"</em>
@@ -523,7 +524,7 @@ else:
                                 if clean_phone and file_id:
                                     schedule_saju_alimtalk_3hours_later(c_name, clean_phone, file_id)
 
-                                status_box.write("7️⃣ 시트1 상태를 '발송완료'로 업데이트 중...")
+                                status_box.write("7️⃣ 시트 상태를 '발송완료'로 업데이트 중...")
                                 update_status_in_sheet(row_idx, "발송완료", c_name, clean_phone)
 
                                 status_box.update(label=f"✅ [{c_name}] 님 사주 분석 및 알림톡 발송 완료!", state="complete")
