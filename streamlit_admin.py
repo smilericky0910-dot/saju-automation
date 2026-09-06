@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 """
 [답답명쾌 사주해답소] 고객 신청서 & 사장님 전용 히든 관리자 시스템
-- 손님 화면: 관리자 버튼 완전 제거, 밝은 모드 강제 고정, 심층 사주풀이 신청서만 표시
-- 사장님 화면: URL 뒤에 ?admin=true 접속 시 비밀번호 입력창 오픈
+- 휴대폰 번호 자동 정규화 (하이픈 자동 삽입 & 010 유효성 검사)
+- 성별 구글 시트 3번째 열 완벽 전송
+- 상단 모드 전환 완전 숨김 & 다크 모드 차단
 """
 
 import streamlit as st
@@ -12,9 +13,9 @@ import datetime
 import calendar
 import time
 import os
-import json
+import re
 
-# 사장님 기존 사주 엔진 모듈 불러오기
+# 사장님 기존 사주 엔진 모듈
 from dabdab_saju_app import (
     convert_to_pillars,
     AdvancedSajuAnalyzer,
@@ -27,7 +28,7 @@ import gdrive_uploader
 from saju_alimtalk import schedule_saju_alimtalk_3hours_later
 
 # -----------------------------------------------------------------------------
-# 1. 페이지 기본 설정 (모바일 최적화)
+# 1. 페이지 기본 설정
 # -----------------------------------------------------------------------------
 st.set_page_config(
     page_title="답답명쾌 사주해답소 | 심층 사주풀이",
@@ -36,10 +37,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 구글 시트 웹앱 URL
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxFPVPgYvx3q-saacm0OkUuELMb-GomV5UDLTVUGRrSuzxDCQdXywyPePQqVhRxJz25Kw/exec"
-
-# 관리자 비밀번호
 ADMIN_PASSWORD = "1234"
 
 ADMIN_CITY_OFFSETS = {
@@ -49,22 +47,19 @@ ADMIN_CITY_OFFSETS = {
 }
 
 # -----------------------------------------------------------------------------
-# 2. 스타일 CSS (다크모드 원천 차단, 밝은 모드 강제 고정, 상단 메뉴 숨김)
+# 2. 스타일 CSS (밝은 모드 강제 고정, 모바일 뷰)
 # -----------------------------------------------------------------------------
 st.markdown("""
 <style>
-    /* 1. 스트림릿 기본 상단 헤더 및 메뉴(다크모드 선택창) 숨기기 */
     #MainMenu {visibility: hidden !important;}
     header {visibility: hidden !important;}
     footer {visibility: hidden !important;}
 
-    /* 2. 전체 배경 밝은 모드 강제 고정 */
     html, body, [data-testid="stAppViewContainer"] {
         background-color: #f4f4f7 !important;
         color: #18181b !important;
     }
 
-    /* 3. 모바일 카드형 레이아웃 (480px) */
     .block-container {
         max-width: 480px !important;
         margin: 15px auto !important;
@@ -86,7 +81,6 @@ st.markdown("""
         }
     }
 
-    /* 4. 상단 배너 (가운데 정렬) */
     .banner-box {
         background: linear-gradient(135deg, #1c1917 0%, #292524 100%);
         color: #fafaf9;
@@ -127,7 +121,6 @@ st.markdown("""
         margin-bottom: 10px;
     }
 
-    /* 모든 라벨 및 텍스트 밝은색 유지 */
     label, p, span, div {
         color: #18181b !important;
     }
@@ -138,7 +131,6 @@ st.markdown("""
         color: #f59e0b !important;
     }
 
-    /* 배지 스타일 */
     .status-badge {
         padding: 3px 8px;
         border-radius: 9999px;
@@ -158,7 +150,26 @@ st.markdown("""
 
 
 # -----------------------------------------------------------------------------
-# 3. 구글 시트 통신 함수
+# 3. 전화번호 검증 및 포맷팅 헬퍼 함수
+# -----------------------------------------------------------------------------
+def format_and_validate_phone(raw_phone):
+    """숫자만 추출 후 010-XXXX-XXXX 형식 검증 및 변환"""
+    digits = re.sub(r'[^0-9]', '', str(raw_phone))
+    
+    # 한국 휴대폰 번호 조건: 010, 011 등으로 시작하는 10자리 또는 11자리 숫자
+    if not (digits.startswith("01") and len(digits) in [10, 11]):
+        return None, "올바른 휴대폰 번호를 입력해 주세요. (예: 010-1234-5678)"
+    
+    if len(digits) == 11:
+        formatted = f"{digits[:3]}-{digits[3:7]}-{digits[7:]}"
+    else: # 10자리 (예: 011, 016, 019 등)
+        formatted = f"{digits[:3]}-{digits[3:6]}-{digits[6:]}"
+        
+    return formatted, None
+
+
+# -----------------------------------------------------------------------------
+# 4. 구글 시트 통신 함수
 # -----------------------------------------------------------------------------
 def fetch_applicants():
     try:
@@ -228,14 +239,14 @@ def parse_time_from_string(time_str):
 
 
 # -----------------------------------------------------------------------------
-# 4. 모드 판별: URL 뒤에 ?admin=true 가 붙어있는지 비밀 확인!
+# 5. 모드 판별 (?admin=true)
 # -----------------------------------------------------------------------------
 query_params = st.query_params if hasattr(st, "query_params") else st.experimental_get_query_params()
 is_admin_mode = str(query_params.get("admin", "")).lower() in ["true", "1", "yes"]
 
 
 # =============================================================================
-# [화면 1] 손님용 심층 사주풀이 신청서 (손님 접속 시 오직 이것만 보임!)
+# [화면 1] 손님용 심층 사주풀이 신청서
 # =============================================================================
 if not is_admin_mode:
     st.markdown("""
@@ -249,6 +260,8 @@ if not is_admin_mode:
     with st.container():
         st.markdown('<div class="section-title">👤 신청자 기본 정보 <span style="font-size:12px;color:#dc2626;font-weight:normal;">* 필수 항목</span></div>', unsafe_allow_html=True)
         name = st.text_input("성명 (이름) *", placeholder="예: 홍길동")
+        
+        # 성별 라디오 버튼
         gender = st.radio("성별 *", ["남성", "여성"], horizontal=True)
 
         st.markdown('<div class="section-title">📅 생년월일 및 출생시 <span style="font-size:12px;color:#dc2626;font-weight:normal;">* 필수 항목</span></div>', unsafe_allow_html=True)
@@ -298,7 +311,7 @@ if not is_admin_mode:
             time_final = "모름 (시간미상)"
 
         st.markdown('<div class="section-title">📱 연락처 정보 (보고서 수신용) <span style="font-size:12px;color:#dc2626;font-weight:normal;">* 필수 항목</span></div>', unsafe_allow_html=True)
-        phone = st.text_input("📱 휴대폰 번호 * (카카오 알림톡/PDF 수신용)", placeholder="010-1234-5678")
+        phone = st.text_input("📱 휴대폰 번호 * (숫자만 입력해도 자동 정렬)", placeholder="예: 01012345678 또는 010-1234-5678")
         email = st.text_input("✉️ 이메일 주소 (선택)", placeholder="example@naver.com")
 
         st.markdown('<div class="section-title">💬 상담 고민 및 집중 질문 (선택)</div>', unsafe_allow_html=True)
@@ -312,58 +325,59 @@ if not is_admin_mode:
         st.markdown("<br>", unsafe_allow_html=True)
 
         if st.button("🔮 사주풀이 신청하기", type="primary", use_container_width=True):
+            # 1. 이름 검증
             if not name.strip():
                 st.error("성명을 입력해 주세요!")
-            elif not phone.strip():
-                st.error("휴대폰 번호를 입력해 주세요!")
-            else:
-                with st.spinner("고객님의 사주풀이 신청이 접수 중입니다..."):
-                    gender_clean = "남" if "남" in gender else "여"
-                    cal_clean = "양력" if "양력" in cal_type else ("음력(윤달)" if "윤달" in cal_type else "음력")
-                    b_date_str = birth_date.strftime("%Y-%m-%d")
-                    concern_clean = concern.strip() if concern.strip() else "전반적인 인생 운세 및 직업/재물운"
+                st.stop()
 
-                    payload = {
-                        "action": "new_application",
-                        "이름": name.strip(),
-                        "성별": gender_clean,
-                        "양음력": cal_clean,
-                        "생년월일": b_date_str,
-                        "태어난시간": time_final,
-                        "출생도시": city,
-                        "휴대폰": phone.strip(),
-                        "이메일": email.strip(),
-                        "고객고민": concern_clean,
-                        "sex": gender_clean,
-                        "gender": gender_clean,
-                        "name": name.strip(),
-                        "cal_type": cal_clean,
-                        "birth_date": b_date_str,
-                        "birth_time": time_final,
-                        "city": city,
-                        "phone": phone.strip(),
-                        "email": email.strip(),
-                        "concern": concern_clean
-                    }
+            # 2. ★ 휴대폰 번호 정밀 유효성 검사 (010 형식 검증)
+            formatted_phone, phone_error = format_and_validate_phone(phone)
+            if phone_error:
+                st.error(phone_error)
+                st.stop()
 
-                    try:
-                        res = requests.post(WEB_APP_URL, json=payload, timeout=15)
-                        if res.status_code == 200:
-                            st.success(
-                                f"🎉 {name}님, 사주풀이 신청이 접수되었습니다!\n\n"
-                                "답답하신 마음이 시원하게 풀리도록 꼼꼼히 분석하겠습니다.\n"
-                                "약 3~6시간 후 접수 순서에 따라 등록하신 휴대폰 카톡으로 발송해 드리겠습니다.\n\n"
-                                "편히 기다려 주시면 정성 가득한 해답지로 찾아뵙겠습니다. 😄"
-                            )
-                            st.balloons()
-                        else:
-                            st.error("접수 전송에 실패했습니다. 잠시 후 다시 시도해 주세요.")
-                    except Exception as e:
-                        st.error(f"접수 통신 중 오류가 발생했습니다: {e}")
+            with st.spinner("고객님의 사주풀이 신청이 접수 중입니다..."):
+                # 성별 확실하게 "남" 또는 "여"로 단일화
+                gender_clean = "남" if "남" in gender else "여"
+                cal_clean = "양력" if "양력" in cal_type else ("음력(윤달)" if "윤달" in cal_type else "음력")
+                b_date_str = birth_date.strftime("%Y-%m-%d")
+                concern_clean = concern.strip() if concern.strip() else "전반적인 인생 운세 및 직업/재물운"
+
+                payload = {
+                    "action": "new_application",
+                    "이름": name.strip(),
+                    "name": name.strip(),
+                    "성별": gender_clean,
+                    "sex": gender_clean,
+                    "gender": gender_clean,
+                    "양음력": cal_clean,
+                    "생년월일": b_date_str,
+                    "태어난시간": time_final,
+                    "출생도시": city,
+                    "휴대폰": formatted_phone,  # 010-XXXX-XXXX 로 자동 포맷팅
+                    "phone": formatted_phone,
+                    "이메일": email.strip(),
+                    "고객고민": concern_clean
+                }
+
+                try:
+                    res = requests.post(WEB_APP_URL, json=payload, timeout=15)
+                    if res.status_code == 200:
+                        st.success(
+                            f"🎉 {name}님, 사주풀이 신청이 접수되었습니다!\n\n"
+                            "답답하신 마음이 시원하게 풀리도록 꼼꼼히 분석하겠습니다.\n"
+                            f"약 3~6시간 후 접수 순서에 따라 등록하신 휴대폰({formatted_phone}) 카톡으로 발송해 드리겠습니다.\n\n"
+                            "편히 기다려 주시면 정성 가득한 해답지로 찾아뵙겠습니다. 😄"
+                        )
+                        st.balloons()
+                    else:
+                        st.error("접수 전송에 실패했습니다. 잠시 후 다시 시도해 주세요.")
+                except Exception as e:
+                    st.error(f"접수 통신 중 오류가 발생했습니다: {e}")
 
 
 # =============================================================================
-# [화면 2] 사장님 전용 비밀 관리자 모드 (?admin=true 로 접속했을 때만 열림!)
+# [화면 2] 사장님 전용 비밀 관리자 모드 (?admin=true 접속)
 # =============================================================================
 else:
     st.markdown("### 🔐 사장님 전용 접수 관리 센터")
@@ -379,7 +393,7 @@ else:
             raw_data = fetch_applicants()
 
         if not raw_data:
-            st.info("현재 시트1에 접수 데이터가 없습니다. (모두 처리되었거나 비어있음)")
+            st.info("현재 시트1에 접수 데이터가 없습니다.")
         else:
             df = pd.DataFrame(raw_data)
             st.caption(f"현재 시트1에 총 **{len(df)}명**의 고객이 있습니다.")
@@ -404,7 +418,7 @@ else:
                         </div>
                         <div style="font-size:12px; color:#52525b; line-height:1.6; margin-bottom:8px;">
                             • 접수일시: {row.get('접수일시', '-')}<br/>
-                            • 성별/양음력: {row.get('성별','-')} | {row.get('양음력','-')}<br/>
+                            • 성별/양음력: <strong>{row.get('성별','-')}</strong> | {row.get('양음력','-')}<br/>
                             • 생년월일: {str(row.get('생년월일','-')).split('T')[0]} ({row.get('태어난시간','-')})<br/>
                             • 출생도시: {row.get('출생도시','-')}<br/>
                             • 연락처: <strong>{row.get('휴대폰','-')}</strong>
