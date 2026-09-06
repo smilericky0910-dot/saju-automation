@@ -900,7 +900,7 @@ def render_input_screen():
     city = st.selectbox("도시명", city_options, index=city_options.index("서울특별시"), label_visibility="collapsed")
     region_offset_mins = st.slider("경도 보정(분)", -45, 0, -30) if city == "직접입력(해외 등)" else CITY_LONGITUDE_OFFSETS[city]
         
-st.markdown("**고객 연락처 (리포트 발송용)**")
+    st.markdown("**고객 연락처 (리포트 발송용)**")
     c_col1, c_col2 = st.columns(2)
     with c_col1:
       phone = st.text_input(
