@@ -14,20 +14,39 @@ SCOPES = ['https://www.googleapis.com/auth/drive']
 ROOT_FOLDER_ID = "17TNn1c_P4EJDZyL7Ks5irB6P3DFXVHUZ"
 
 
+import streamlit as st
+
 def get_drive_service():
     """구글 드라이브 API 인증 및 서비스 빌드"""
     creds = None
-    if os.path.exists('token.json'):
+    
+    # 1. 스트림릿 클라우드(st.secrets)에서 인증 정보 확인
+    try:
+        if "gdrive_token" in st.secrets:
+            creds_data = dict(st.secrets["gdrive_token"])
+            creds = Credentials.from_authorized_user_info(creds_data, SCOPES)
+    except Exception:
+        pass
+
+    # 2. 로컬(token.json)에서 인증 정보 확인
+    if not creds and os.path.exists('token.json'):
         creds = Credentials.from_authorized_user_file('token.json', SCOPES)
 
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            flow = InstalledAppFlow.from_client_secrets_file('client_secrets.json', SCOPES)
-            creds = flow.run_local_server(port=0)
-        with open('token.json', 'w') as token:
-            token.write(creds.to_json())
+            if os.path.exists('client_secrets.json'):
+                flow = InstalledAppFlow.from_client_secrets_file('client_secrets.json', SCOPES)
+                creds = flow.run_local_server(port=0)
+            else:
+                raise FileNotFoundError("구글 드라이브 인증 정보가 없습니다. (client_secrets.json 또는 secrets.toml 누락)")
+        
+        try:
+            with open('token.json', 'w') as token:
+                token.write(creds.to_json())
+        except Exception:
+            pass
 
     return build('drive', 'v3', credentials=creds)
 
