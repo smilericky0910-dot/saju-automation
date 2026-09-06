@@ -900,12 +900,18 @@ def render_input_screen():
     city = st.selectbox("도시명", city_options, index=city_options.index("서울특별시"), label_visibility="collapsed")
     region_offset_mins = st.slider("경도 보정(분)", -45, 0, -30) if city == "직접입력(해외 등)" else CITY_LONGITUDE_OFFSETS[city]
         
-    st.markdown("**고객 연락처 (리포트 발송용)**")
+st.markdown("**고객 연락처 (리포트 발송용)**")
     c_col1, c_col2 = st.columns(2)
     with c_col1:
-        phone = st.text_input("휴대폰 번호", placeholder="휴대폰 번호 (예: 010-1234-5678)", label_visibility="collapsed")
+      phone = st.text_input(
+          "📱 휴대폰 번호 * (필수)",
+          placeholder="010-1234-5678",
+          help="카카오 알림톡 및 리포트 발송용",
+      )
     with c_col2:
-        email = st.text_input("이메일", placeholder="이메일 주소 (예: user@example.com)", label_visibility="collapsed")
+      email = st.text_input(
+          "✉️ 이메일 주소 (선택)", placeholder="example@naver.com"
+      )
 
     st.markdown("**고객 고민 / 추가 전달 사항**")
     deep_question = st.text_area("고객 고민", placeholder="현재 고민이나 궁금한 점을 적어주시면 AI 분석 시 반영됩니다.", height=100, label_visibility="collapsed")
@@ -1347,7 +1353,7 @@ def main():
     st.set_page_config(
         page_title="답답명쾌 사주해답소",
         page_icon="🔮",
-        layout="centered",
+        layout="wide",
         initial_sidebar_state="collapsed",
     )
     st.markdown("""
