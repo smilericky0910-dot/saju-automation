@@ -16,7 +16,7 @@ SOLAPI_API_SECRET = "XI74TLN77XM8K0PSVTZCQLICUPWZSH8B"
 KAKAO_PF_ID = "KA01PF260905085546550ANXKNTJ0de2"
 
 # ★ 카카오 템플릿 검수가 승인되면 여기에 템플릿 ID를 넣어주세요.
-TEMPLATE_ID = "승인후_발급받을_템플릿ID"
+TEMPLATE_ID = "KA01TP260905091348759MllkxYD7567"
 
 
 def get_solapi_auth_header(api_key: str, api_secret: str) -> str:
@@ -33,17 +33,11 @@ def get_solapi_auth_header(api_key: str, api_secret: str) -> str:
   )
 
 
-def schedule_saju_alimtalk_3hours_later(
+def send_saju_alimtalk_immediately(
     customer_name: str, phone_number: str, file_id: str
 ):
-  """구글 드라이브 파일 ID를 받아 3시간 뒤에 알림톡이 발송되도록 솔라피에 예약 등록합니다."""
+  """구글 드라이브 파일 ID를 받아 즉시 알림톡(카톡 미설치시 대체 문자)을 발송합니다."""
 
-  # 1. 3시간 뒤 발송 시각 계산 (ISO 8601 UTC 형식)
-  send_time_utc = datetime.now(timezone.utc) + timedelta(hours=3)
-  scheduled_date_str = send_time_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
-
-  # 한국 시간 기준 확인용
-  kst_send_time = datetime.now() + timedelta(hours=3)
   clean_phone = "".join(c for c in phone_number if c.isdigit())
 
   url = "https://api.solapi.com/messages/v4/send"
@@ -58,7 +52,6 @@ def schedule_saju_alimtalk_3hours_later(
   payload = {
       "message": {
           "to": clean_phone,
-          "scheduledDate": scheduled_date_str,  # ★ 3시간 뒤 자동 예약
           "text": f"""신청하신
 분석이 완료되었습니다.
 
@@ -74,7 +67,7 @@ def schedule_saju_alimtalk_3hours_later(
                   "#{이름}": customer_name,
                   "#{파일ID}": file_id,
               },
-              "disableSms": True,  # 대체 문자 발송 미사용
+              "disableSms": False,  # 대체 문자 발송 사용 (카톡 미설치시 문자로 전송)
           },
       }
   }
@@ -84,14 +77,11 @@ def schedule_saju_alimtalk_3hours_later(
     res_data = res.json()
 
     if res.status_code == 200:
-      print(f"✅ [{customer_name}]님 카카오 알림톡 3시간 뒤 예약 성공!")
+      print(f"✅ [{customer_name}]님 카카오 알림톡 즉시 발송 성공!")
       print(f"   - 수신 번호: {clean_phone}")
-      print(
-          f"   - 발송 예정 시각: {kst_send_time.strftime('%Y-%m-%d %H:%M:%S')}"
-      )
       return True
     else:
-      print(f"❌ 예약 실패: {res_data}")
+      print(f"❌ 발송 실패: {res_data}")
       return False
   except Exception as e:
     print(f"⚠️ 요청 중 에러 발생: {e}")

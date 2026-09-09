@@ -164,47 +164,62 @@ def generate_saju_report(
         if progress_callback:
             progress_callback(pct, msg)
 
-        # 최대 2회 시도 (1차 작성 ➔ 검증 실패 시 피드백 주입 후 1회 재작성)
+        messages = []
+        user_prompt = (
+            f"지침서에 정의된 톤앤매너에 맞추어, **제{ch_num}장. {ch_title}** 내용을 풍성하고 완전하게 작성해 주세요.\n\n"
+            f"세부 지침:\n{ch_inst}\n\n"
+            f"규칙:\n"
+            f"- 반드시 '# 제{ch_num}장. {ch_title}' 제목으로 시작하세요.\n"
+            f"- 중간에 말을 흐리거나 요약하지 말고 완전한 문장으로 깊이 있게 마무리하세요.\n"
+            f"- 마크다운 표는 절대 그리지 마세요."
+        )
+        messages.append({"role": "user", "content": user_prompt})
+
         final_content = ""
-        for attempt in range(2):
-            retry_note = ""
-            if attempt > 0:
-                retry_note = "\n\n[주의: 이전 작성 시 문장이 중간에 잘리거나 항목이 누락되었습니다. 이번에는 분량을 알맞게 조절하여 마지막 문장까지 마침표로 반드시 완전하게 마무리하세요.]"
-
-            user_prompt = (
-                f"지침서에 정의된 톤앤매너에 맞추어, **제{ch_num}장. {ch_title}** 내용을 풍성하고 완전하게 작성해 주세요.{retry_note}\n\n"
-                f"세부 지침:\n{ch_inst}\n\n"
-                f"규칙:\n"
-                f"- 반드시 '# 제{ch_num}장. {ch_title}' 제목으로 시작하세요.\n"
-                f"- 중간에 말을 흐리거나 요약하지 말고 완전한 문장으로 깊이 있게 마무리하세요.\n"
-                f"- 마크다운 표는 절대 그리지 마세요."
-            )
-
+        
+        # 최대 3회 시도 (이어서 쓰기 또는 누락 내용 보완)
+        for attempt in range(3):
             response = client.messages.create(
                 model=model_name,
                 max_tokens=8192,
                 system=system_blocks,
-                messages=[{"role": "user", "content": user_prompt}]
+                messages=messages
             )
 
             content_text = ""
             for block in response.content:
                 if hasattr(block, "text"):
                     content_text += block.text
+            
+            # 이어쓰는 경우 공백 등이 어색하지 않게 합침
+            final_content += content_text
 
             # 실시간 검증 수행
             stop_reason = getattr(response, 'stop_reason', None)
-            is_valid, reason = verify_chapter_output(ch_num, ch_title, content_text, stop_reason, saju_data)
+            is_valid, reason = verify_chapter_output(ch_num, ch_title, final_content, stop_reason, saju_data)
 
             if is_valid:
-                final_content = content_text.strip()
+                final_content = final_content.strip()
                 break
             else:
-                # 1차 실패 시 재작성 진행
-                if attempt == 0:
-                    if progress_callback:
-                        progress_callback(pct, f"제{ch_num}장 보완 재작성 중... ({reason})")
-                final_content = content_text.strip()
+                if attempt < 2:
+                    messages.append({"role": "assistant", "content": content_text})
+                    
+                    if stop_reason == "max_tokens" or "문장이 온전히 끝나지 않고" in reason:
+                        if progress_callback:
+                            progress_callback(pct, f"제{ch_num}장 이어서 작성 중... ({reason})")
+                        messages.append({
+                            "role": "user", 
+                            "content": "글자 수 제한으로 인해 내용이 중간에 끊겼습니다. 내용이 중복되지 않게, 방금 끊긴 부분부터 문맥을 자연스럽게 유지하여 계속 이어서 끝까지 작성해주세요."
+                        })
+                    else:
+                        if progress_callback:
+                            progress_callback(pct, f"제{ch_num}장 보완 내용 추가 중... ({reason})")
+                        messages.append({
+                            "role": "user", 
+                            "content": f"작성된 내용 중 다음 사항이 누락되거나 부족합니다: {reason}\n이 부분을 보완하여 내용을 추가로 이어서 작성해주세요."
+                        })
+                final_content = final_content.strip()
 
         full_report_parts.append(final_content)
 

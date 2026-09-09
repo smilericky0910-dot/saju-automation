@@ -35,6 +35,37 @@ for i in range(60):
 
 MONTH_BRANCHES = ['寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥', '子', '丑']
 
+MYUNGRI_TIME_OPTIONS = [
+    "시간 모름 (선택 시 시간 제외)",
+    "자시 (23:30 ~ 01:30)",
+    "축시 (01:30 ~ 03:30)",
+    "인시 (03:30 ~ 05:30)",
+    "묘시 (05:30 ~ 07:30)",
+    "진시 (07:30 ~ 09:30)",
+    "사시 (09:30 ~ 11:30)",
+    "오시 (11:30 ~ 13:30)",
+    "미시 (13:30 ~ 15:30)",
+    "신시 (15:30 ~ 17:30)",
+    "유시 (17:30 ~ 19:30)",
+    "술시 (19:30 ~ 21:30)",
+    "해시 (21:30 ~ 23:30)",
+]
+
+MYUNGRI_TIME_MAPPING = {
+    "자시 (23:30 ~ 01:30)": datetime.time(0, 30),
+    "축시 (01:30 ~ 03:30)": datetime.time(2, 30),
+    "인시 (03:30 ~ 05:30)": datetime.time(4, 30),
+    "묘시 (05:30 ~ 07:30)": datetime.time(6, 30),
+    "진시 (07:30 ~ 09:30)": datetime.time(8, 30),
+    "사시 (09:30 ~ 11:30)": datetime.time(10, 30),
+    "오시 (11:30 ~ 13:30)": datetime.time(12, 30),
+    "미시 (13:30 ~ 15:30)": datetime.time(14, 30),
+    "신시 (15:30 ~ 17:30)": datetime.time(16, 30),
+    "유시 (17:30 ~ 19:30)": datetime.time(18, 30),
+    "술시 (19:30 ~ 21:30)": datetime.time(20, 30),
+    "해시 (21:30 ~ 23:30)": datetime.time(22, 30),
+}
+
 CITY_LONGITUDE_OFFSETS = {
     "서울특별시": -32, "부산광역시": -24, "대구광역시": -26, "인천광역시": -33,
     "광주광역시": -33, "대전광역시": -30, "울산광역시": -23, "세종특별자치시": -31,
@@ -57,6 +88,22 @@ CITY_LONGITUDE_OFFSETS = {
     "창원시": -25, "진주시": -28, "통영시": -26, "사천시": -28, "김해시": -24,
     "밀양시": -25, "거제시": -26, "양산시": -24,
     "제주시": -34, "서귀포시": -34,
+    "양평군": -31, "가평군": -30, "연천군": -32,
+    "홍천군": -29, "횡성군": -28, "영월군": -26, "평창군": -26, "정선군": -25, 
+    "철원군": -31, "화천군": -30, "양구군": -28, "인제군": -27, "고성군(강원)": -26, "양양군": -25,
+    "보은군": -29, "옥천군": -30, "영동군": -29, "증평군": -30, "진천군": -31, 
+    "괴산군": -29, "음성군": -30, "단양군": -26,
+    "금산군": -30, "부여군": -32, "서천군": -33, "청양군": -32, "홍성군": -33, "예산군": -33, "태안군": -35,
+    "완주군": -31, "진안군": -30, "무주군": -29, "장수군": -29, "임실군": -31, "순창군": -31, "고창군": -33, "부안군": -33,
+    "담양군": -32, "곡성군": -31, "구례군": -30, "고흥군": -31, "보성군": -32, "화순군": -32, "장흥군": -32, 
+    "강진군": -33, "해남군": -34, "영암군": -34, "무안군": -34, "함평군": -34, "영광군": -34, "장성군": -33, 
+    "완도군": -33, "진도군": -35, "신안군": -35,
+    "군위군": -25, "의성군": -25, "청송군": -23, "영양군": -23, "영덕군": -22, "청도군": -25, "고령군": -26, 
+    "성주군": -27, "칠곡군": -26, "예천군": -26, "봉화군": -25, "울진군": -22, "울릉군": -16,
+    "의령군": -27, "함안군": -26, "창녕군": -26, "고성군(경남)": -27, "남해군": -28, "하동군": -29, 
+    "산청군": -28, "함양군": -29, "거창군": -28, "합천군": -27,
+    "강원도": -29, "경기도": -32, "충청북도": -29, "충청남도": -32,
+    "전라북도": -31, "전라남도": -32, "경상북도": -26, "경상남도": -27, "제주도": -34,
     "보정 없음 (표준시 그대로 0분)": 0,
 }
 
@@ -836,12 +883,16 @@ def _sipsin_distribution(analyzer):
 def _pillar_card_html(label, stem, stem_deity, branch, branch_deity, jijanggan, unseong, sinsal):
     s_bg, s_fg = ELEMENT_COLORS[STEM_INFO[stem]['element']]
     b_bg, b_fg = ELEMENT_COLORS[BRANCH_INFO[branch]['element']]
+    
+    k_stem = STEM_INFO[stem]['name'][0]
+    k_branch = BRANCH_INFO[branch]['k_name'][0]
+    
     return f"""
     <div style="border:1px solid #e0e0e0;border-radius:12px;padding:10px 6px;text-align:center;background:#fff;">
       <div style="font-size:12px;color:#888;margin-bottom:6px;">{label}</div>
-      <div style="background:{s_bg};color:{s_fg};border-radius:8px;padding:10px 2px;font-size:24px;font-weight:800;margin-bottom:4px;">{stem}</div>
+      <div style="background:{s_bg};color:{s_fg};border-radius:8px;padding:10px 2px;font-size:22px;font-weight:800;margin-bottom:4px;letter-spacing:1px;">{k_stem}{stem}</div>
       <div style="font-size:11px;color:#666;margin-bottom:8px;">{stem_deity}</div>
-      <div style="background:{b_bg};color:{b_fg};border-radius:8px;padding:10px 2px;font-size:24px;font-weight:800;margin-bottom:4px;">{branch}</div>
+      <div style="background:{b_bg};color:{b_fg};border-radius:8px;padding:10px 2px;font-size:22px;font-weight:800;margin-bottom:4px;letter-spacing:1px;">{k_branch}{branch}</div>
       <div style="font-size:11px;color:#666;margin-bottom:6px;">{branch_deity}</div>
       <div style="font-size:10px;color:#aaa;">지장간 {jijanggan}</div>
       <div style="font-size:10px;color:#aaa;">{unseong} · {sinsal}</div>
@@ -849,32 +900,92 @@ def _pillar_card_html(label, stem, stem_deity, branch, branch_deity, jijanggan, 
     """
 
 def render_input_screen():
-    st.markdown("### 🔮 답답명쾌 사주해답소 - 분석 정보 입력")
+    st.markdown("""
+        <style>
+        .header-box h1, .header-box h4, .header-box p {
+            color: #ffffff !important;
+        }
+        </style>
+        <div class="header-box" style='background-color:#2b2926; padding:2rem; border-radius:10px; margin-bottom:2rem; text-align:center;'>
+            <h4 style='margin-top:0; font-size:18px;'>답답명쾌 사주 해답소</h4>
+            <h1 style='margin-top:5px; margin-bottom:15px; font-size:32px;'>심층 사주풀이 신청서</h1>
+            <p style='margin-bottom:0; font-size:16px; line-height:1.6;'>고객님의 생년월일시와 상담 고민을 남겨주시면, 정밀 사주원국을 분석하여 심층 풀이 및 맞춤형 PDF 보고서를 카카오톡으로 발송해 드립니다.</p>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    # [추가] 백업 복구 버튼
+    import os, json
+    if os.path.exists("last_analysis_backup.json"):
+        st.info("⚠️ **이전 분석 결과가 남아있습니다.** 오류로 튕겼거나 이전 상태를 복구하시려면 아래 버튼을 누르세요.")
+        if st.button("🔄 마지막 분석 결과 복구하기 (PDF 생성 화면으로 이동)", type="primary"):
+            try:
+                with open("last_analysis_backup.json", "r", encoding="utf-8") as f:
+                    backup = json.load(f)
+                st.session_state.saju_data = backup["saju_data"]
+                st.session_state.report_text = backup["report_text"]
+                # 더미 analyzer 객체 생성 (result 화면에서 필요한 속성만 가짐)
+                class DummyAnalyzer:
+                    def __init__(self, n, s, h, dm):
+                        self.name = n
+                        self.sex = s
+                        self.hour = h
+                        self.day_master = dm
+                st.session_state.analyzer = DummyAnalyzer(
+                    backup["analyzer_name"], backup["analyzer_sex"], 
+                    backup["analyzer_hour"], backup["analyzer_day_master"]
+                )
+                b_date = datetime.datetime.strptime(backup["input_data_birth_date"], '%Y-%m-%d').date()
+                st.session_state.input_data = {"birth_date": b_date}
+                st.session_state.step = 'result'
+                st.rerun()
+            except Exception as e:
+                st.error(f"복구 실패: {e}")
+        st.write("---")
+
+    st.markdown("<h3 style='font-size:22px; margin-bottom:10px; color:#222;'>👤 신청자 기본 정보</h3>", unsafe_allow_html=True)
     col1, col2 = st.columns(2)
     with col1:
-        st.markdown("**이름**")
-        name = st.text_input("이름", value="", max_chars=12, placeholder="이름 입력", label_visibility="collapsed")
+        st.markdown("<div style='font-size:16px; font-weight:bold; margin-bottom:8px; color:#222;'>성명 (이름) <span style='color:red;font-size:14px;'>* (필수)</span></div>", unsafe_allow_html=True)
+        name = st.text_input("이름", value="", max_chars=12, placeholder="예: 홍길동", label_visibility="collapsed")
     with col2:
-        st.markdown("**성별**")
-        sex = st.radio("성별 선택", ["여자", "남자"], horizontal=True, label_visibility="collapsed")
-        sex_internal = "남성" if sex == "남자" else "여성"
+        st.markdown("<div style='font-size:16px; font-weight:bold; margin-bottom:8px; color:#222;'>성별 <span style='color:red;font-size:14px;'>* (필수)</span></div>", unsafe_allow_html=True)
+        sex = st.radio("성별 선택", ["남자", "여자"], horizontal=True, label_visibility="collapsed")
+        sex_internal = "남성" if "남자" in sex else "여성"
 
-    st.markdown("**생년월일시**")
-    col1, col2, col3, col4, col5 = st.columns([15, 12, 10, 10, 18])
+    st.markdown("<br><h3 style='font-size:22px; margin-bottom:10px; color:#222;'>📅 생년월일 및 출생시 (사주 원국 산출)</h3>", unsafe_allow_html=True)
+    col1, col2, col3, col4 = st.columns([15, 12, 10, 10])
     with col1:
-        calendar_type = st.selectbox("양력/음력", ["양력", "음력", "음력(윤달)"], label_visibility="collapsed")
+        st.markdown("<div style='font-size:16px; font-weight:bold; margin-bottom:8px; color:#222;'>양력 / 음력 <span style='color:red;font-size:14px;'>* (필수)</span></div>", unsafe_allow_html=True)
+        calendar_type = st.selectbox("양력/음력", ["양력(Solar)", "음력(Lunar)", "음력 윤달(Leap)"], label_visibility="collapsed")
     with col2:
+        st.markdown("<div style='font-size:16px; font-weight:bold; margin-bottom:8px; color:#222;'>년도 <span style='color:red;font-size:14px;'>*</span></div>", unsafe_allow_html=True)
         current_year = datetime.datetime.now().year
         year_options = [f"{y}년" for y in range(current_year, current_year - 101, -1)]
         selected_year = st.selectbox("년", year_options, index=year_options.index("1990년"), label_visibility="collapsed")
     with col3:
+        st.markdown("<div style='font-size:16px; font-weight:bold; margin-bottom:8px; color:#222;'>월 <span style='color:red;font-size:14px;'>*</span></div>", unsafe_allow_html=True)
         month_options = [f"{m}월" for m in range(1, 13)]
         selected_month = st.selectbox("월", month_options, index=0, label_visibility="collapsed")
     with col4:
+        st.markdown("<div style='font-size:16px; font-weight:bold; margin-bottom:8px; color:#222;'>일 <span style='color:red;font-size:14px;'>*</span></div>", unsafe_allow_html=True)
         day_options = [f"{d}일" for d in range(1, 32)]
         selected_day = st.selectbox("일", day_options, index=0, label_visibility="collapsed")
-    with col5:
-        birth_time = st.time_input("태어난 시간", value=datetime.time(12, 0), label_visibility="collapsed")
+    
+    col_t1, col_t2 = st.columns([1, 1])
+    with col_t1:
+        st.markdown("<div style='font-size:16px; font-weight:bold; margin-top:15px; margin-bottom:8px; color:#222;'>🕒 태어난 시간 <span style='color:red;font-size:14px;'>* (필수)</span></div>", unsafe_allow_html=True)
+        time_selection = st.selectbox("태어난 시간 유형", MYUNGRI_TIME_OPTIONS, index=0, label_visibility="collapsed")
+        
+        if time_selection == "시간 모름 (선택 시 시간 제외)":
+            birth_time = datetime.time(12, 0)
+            time_unknown = True
+        else:
+            birth_time = MYUNGRI_TIME_MAPPING[time_selection]
+            time_unknown = False
+            
+    with col_t2:
+        st.markdown("<div style='margin-top:45px;'></div>", unsafe_allow_html=True)
+        use_jasi_option = st.checkbox("야자시/조자시 적용 (23:30~24:00)")
     
     y_val = int(selected_year.replace("년", ""))
     m_val = int(selected_month.replace("월", ""))
@@ -884,39 +995,43 @@ def render_input_screen():
     except ValueError:
         birth_date = datetime.date(1990, 1, 1)
         
-    is_lunar = calendar_type in ["음력", "음력(윤달)"]
-    is_leap = calendar_type == "음력(윤달)"
+    is_lunar = "음력" in calendar_type
+    is_leap = "윤달" in calendar_type
     
-    col4, col5 = st.columns([10, 15])
-    with col4:
-        time_unknown = st.checkbox("시간 모름")
-    with col5:
-        use_jasi_option = st.checkbox("야자시/조자시 적용")
+
         
     time_boundary = "야자시 적용 (23:30~24:00)" if use_jasi_option else "표준 자시(기본)"
 
-    st.markdown("**출생 도시**")
+    st.markdown("<br><div style='font-size:16px; font-weight:bold; margin-bottom:8px; color:#222;'>출생 도시 (태어난 지역) <span style='color:red;font-size:14px;'>* (필수)</span></div>", unsafe_allow_html=True)
     city_options = list(CITY_LONGITUDE_OFFSETS.keys()) + ["직접입력(해외 등)"]
     city = st.selectbox("도시명", city_options, index=city_options.index("서울특별시"), label_visibility="collapsed")
-    region_offset_mins = st.slider("경도 보정(분)", -45, 0, -30) if city == "직접입력(해외 등)" else CITY_LONGITUDE_OFFSETS[city]
+    if city == "직접입력(해외 등)":
+        region_offset_mins = st.slider("경도 보정(분)", -45, 0, -30)
+    else:
+        region_offset_mins = CITY_LONGITUDE_OFFSETS[city]
         
-    st.markdown("**고객 연락처 (리포트 발송용)**")
+    st.markdown("<br><h3 style='font-size:22px; margin-bottom:10px; color:#222;'>📞 보고서 수신 연락처 정보</h3>", unsafe_allow_html=True)
     c_col1, c_col2 = st.columns(2)
     with c_col1:
+      st.markdown("<div style='font-size:16px; font-weight:bold; margin-bottom:8px; color:#222;'>휴대폰 번호 (PDF 수신용) <span style='color:red;font-size:14px;'>* (필수)</span></div>", unsafe_allow_html=True)
       phone = st.text_input(
-          "📱 휴대폰 번호 * (필수)",
+          "휴대폰 번호",
           placeholder="010-1234-5678",
           help="카카오 알림톡 및 리포트 발송용",
+          label_visibility="collapsed"
       )
+      st.caption("* 분석 완료 시 카카오톡으로 PDF 사주 감정서 보고서가 전송됩니다.")
     with c_col2:
+      st.markdown("<div style='font-size:16px; font-weight:bold; margin-bottom:8px; color:#222;'>이메일 주소 <span style='color:#888;font-size:14px;'>(선택 사항)</span></div>", unsafe_allow_html=True)
       email = st.text_input(
-          "✉️ 이메일 주소 (선택)", placeholder="example@naver.com"
+          "이메일 주소", placeholder="선택 사항입니다 (customer@example.com)", label_visibility="collapsed"
       )
+      st.caption("이메일로도 추가 사본을 받고 싶으신 때만 입력해 주세요.")
 
-    st.markdown("**고객 고민 / 추가 전달 사항**")
-    deep_question = st.text_area("고객 고민", placeholder="현재 고민이나 궁금한 점을 적어주시면 AI 분석 시 반영됩니다.", height=100, label_visibility="collapsed")
+    st.markdown("<br><h3 style='font-size:22px; margin-bottom:10px; color:#222;'>❓ 상담받고 싶은 고민 / 가장 궁금한 점 <span style='color:red;font-size:14px;'>* (필수)</span></h3>", unsafe_allow_html=True)
+    deep_question = st.text_area("고객 고민", placeholder="예: 올해 하반기 이직운과 재물 흐름이 궁금합니다. (특별한 고민이 없으신 경우 '없음'으로 적어주세요)", height=100, label_visibility="collapsed")
 
-    st.markdown("**💕 궁합 분석 (선택)**")
+    st.markdown("<br><h3 style='font-size:22px; margin-bottom:10px; color:#222;'>💕 궁합 분석 (선택)</h3>", unsafe_allow_html=True)
     want_compat = st.checkbox("궁합 분석을 함께 신청할게요")
     compat_type = partner_name = partner_sex = partner_city = None
     partner_birth_known = False
@@ -949,7 +1064,7 @@ def render_input_screen():
             with qcol4:
                 p_selected_day = st.selectbox("일", day_options, index=0, key="partner_day", label_visibility="collapsed")
             with qcol5:
-                partner_time_unknown = st.checkbox("시간 모름", value=True, key="partner_time_unknown")
+                pass
 
             partner_is_lunar = p_calendar_type in ["음력", "음력(윤달)"]
             partner_is_leap = p_calendar_type == "음력(윤달)"
@@ -961,8 +1076,14 @@ def render_input_screen():
             except ValueError:
                 partner_date = datetime.date(1990, 1, 1)
 
-            if not partner_time_unknown:
-                partner_time = st.time_input(f"{partner_label} 태어난 시간", value=datetime.time(12, 0), key="partner_time")
+            st.markdown(f"<div style='font-size:16px; font-weight:bold; margin-top:10px; margin-bottom:8px; color:#222;'>🕒 {partner_label} 태어난 시간</div>", unsafe_allow_html=True)
+            p_time_selection = st.selectbox(f"{partner_label} 태어난 시간 유형", MYUNGRI_TIME_OPTIONS, index=0, key="p_time_select", label_visibility="collapsed")
+            if p_time_selection == "시간 모름 (선택 시 시간 제외)":
+                partner_time = None
+                partner_time_unknown = True
+            else:
+                partner_time = MYUNGRI_TIME_MAPPING[p_time_selection]
+                partner_time_unknown = False
 
             partner_city_options = ["선택 안 함"] + list(CITY_LONGITUDE_OFFSETS.keys())
             partner_city = st.selectbox(f"{partner_label} 태어난 도시", partner_city_options, key="partner_city")
@@ -1014,8 +1135,66 @@ def render_input_screen():
             """
             st.markdown("<h4 style='text-align:center;'>💕 궁합 분석 정보</h4>", unsafe_allow_html=True)
             st.markdown(compat_table_html, unsafe_allow_html=True)
-        
+
         if st.button("🚀 고객정보입력 완료", type="primary", use_container_width=True):
+            # 양력 날짜 유효성 검증
+            if not is_lunar:
+                try:
+                    datetime.date(y_val, m_val, d_val)
+                except ValueError:
+                    st.error(f"❌ 선택하신 양력 날짜({y_val}년 {m_val}월 {d_val}일)는 유효하지 않은 날짜입니다.")
+                    return
+
+            # 파트너 양력 날짜 유효성 검증
+            if want_compat and partner_birth_known and not partner_is_lunar:
+                try:
+                    datetime.date(p_y, p_m, p_d)
+                except ValueError:
+                    st.error(f"❌ 상대방 양력 날짜({p_y}년 {p_m}월 {p_d}일)는 유효하지 않은 날짜입니다.")
+                    return
+
+            # 음력 날짜 유효성 검증
+            if is_lunar and LUNAR_CALENDAR_AVAILABLE:
+                try:
+                    # 입력 음력 → 양력 → 음력 변환으로 유효성 확인
+                    test_cal = KoreanLunarCalendar()
+                    test_cal.setLunarDate(y_val, m_val, d_val, is_leap)
+                    solar_y, solar_m, solar_d = test_cal.solarYear, test_cal.solarMonth, test_cal.solarDay
+
+                    # 다시 음력으로 역변환
+                    verify_cal = KoreanLunarCalendar()
+                    verify_cal.setSolarDate(solar_y, solar_m, solar_d)
+
+                    # 원래 입력과 다르면 유효하지 않은 날짜
+                    if (verify_cal.lunarYear != y_val or verify_cal.lunarMonth != m_val or
+                        verify_cal.lunarDay != d_val or verify_cal.isIntercalation != is_leap):
+                        st.error(f"❌ 선택하신 음력 날짜({y_val}년 {m_val}월 {d_val}일{'(윤달)' if is_leap else ''})는 유효하지 않은 날짜입니다. 그 달은 {verify_cal.lunarDay}일까지만 있습니다.")
+                        return
+                except Exception as e:
+                    st.error(f"❌ 음력 날짜 검증 중 오류 발생: {e}")
+                    return
+
+            # 파트너 음력 날짜 유효성 검증
+            if want_compat and partner_birth_known and partner_is_lunar and LUNAR_CALENDAR_AVAILABLE:
+                try:
+                    # 입력 음력 → 양력 → 음력 변환으로 유효성 확인
+                    test_cal = KoreanLunarCalendar()
+                    test_cal.setLunarDate(p_y, p_m, p_d, partner_is_leap)
+                    solar_y, solar_m, solar_d = test_cal.solarYear, test_cal.solarMonth, test_cal.solarDay
+
+                    # 다시 음력으로 역변환
+                    verify_cal = KoreanLunarCalendar()
+                    verify_cal.setSolarDate(solar_y, solar_m, solar_d)
+
+                    # 원래 입력과 다르면 유효하지 않은 날짜
+                    if (verify_cal.lunarYear != p_y or verify_cal.lunarMonth != p_m or
+                        verify_cal.lunarDay != p_d or verify_cal.isIntercalation != partner_is_leap):
+                        st.error(f"❌ 상대방 음력 날짜({p_y}년 {p_m}월 {p_d}일{'(윤달)' if partner_is_leap else ''})는 유효하지 않은 날짜입니다.")
+                        return
+                except Exception as e:
+                    st.error(f"❌ 상대방 음력 날짜 검증 중 오류 발생: {e}")
+                    return
+
             data = {
                 'name': name.strip(), 'sex': sex_internal, 'is_lunar': is_lunar, 'is_leap': is_leap,
                 'time_unknown': time_unknown, 'birth_date': birth_date, 'birth_time': birth_time if not time_unknown else None,
@@ -1029,6 +1208,7 @@ def render_input_screen():
                     'phone': phone.strip() if phone else "",
                     'email': email.strip() if email else ""
                 },
+                'original_birth_str': f"{birth_date.strftime('%Y년 %m월 %d일')} ({cal_str})",
                 'compatibility': {'requested': False},
             }
             st.session_state.input_data = data
@@ -1053,6 +1233,8 @@ def render_input_screen():
                 st.session_state.analyzer = analyzer
                 saju_data = analyzer.compute_all()
                 saju_data['contact'] = data.get('contact') or {}
+                saju_data['meta'] = saju_data.get('meta', {})
+                saju_data['meta']['original_birth_str'] = data.get('original_birth_str')
 
                 compat_out = {'requested': False}
                 if want_compat:
@@ -1082,7 +1264,29 @@ def render_input_screen():
                             compat_out['partner_saju'] = None
                 saju_data['compatibility'] = compat_out
                 st.session_state.saju_data = saju_data
-                st.session_state.report_text = analyzer.generate_detailed_report()
+                
+                st.info("⚠️ **안내**: 분석을 즉시 중단하려면 화면 우측 상단의 **[정지(Stop)]** 버튼을 누르거나 키보드의 **ESC** 키를 누르세요.")
+                with st.spinner("우주와 교감하며 사주 명식을 심층 분석 중입니다... 🌌 (약 1분 소요)"):
+                    report_text = analyzer.generate_detailed_report()
+                    st.session_state.report_text = report_text
+                
+                # 분석 직후 백업 저장
+                try:
+                    import json, os
+                    backup_data = {
+                        "saju_data": saju_data,
+                        "report_text": report_text,
+                        "analyzer_name": analyzer.name,
+                        "analyzer_sex": analyzer.sex,
+                        "analyzer_hour": analyzer.hour,
+                        "analyzer_day_master": analyzer.day_master,
+                        "input_data_birth_date": data['birth_date'].strftime('%Y-%m-%d')
+                    }
+                    with open("last_analysis_backup.json", "w", encoding="utf-8") as f:
+                        json.dump(backup_data, f, ensure_ascii=False)
+                except Exception as e:
+                    print("백업 실패:", e)
+
                 st.session_state.step = 'result'
                 st.rerun()
             except Exception as e:
@@ -1185,26 +1389,44 @@ def render_gdrive_upload_section(saju_data, customer_name, birth_date):
                 f" 확인하기]({upload_res['webViewLink']})"
             )
 
-          # [3. 구글 드라이브 파일 ID로 3시간 뒤 카카오 알림톡 예약 발송]
+          # [3. 구글 드라이브 파일 ID를 세션에 임시 저장하여 수동 발송 대기]
           if clean_phone and "id" in upload_res:
-            try:
-              from saju_alimtalk import schedule_saju_alimtalk_3hours_later
-
-              schedule_saju_alimtalk_3hours_later(
-                  customer_name=customer_name,
-                  phone_number=clean_phone,
-                  file_id=upload_res["id"],
-              )
-              st.info(
-                  "📱 파일 생성 완료! 3시간 뒤 카카오 알림톡 발송 예약이"
-                  " 접수되었습니다."
-              )
-            except Exception as alim_err:
-              st.warning(f"알림톡 예약 안내: {alim_err}")
+            st.session_state.pending_alimtalk = {
+                "customer_name": customer_name,
+                "phone_number": clean_phone,
+                "file_id": upload_res["id"],
+                "webViewLink": upload_res.get("webViewLink", "")
+            }
+            
+            st.info("📱 파일 생성이 완료되었습니다. 아래에서 내용을 검수하신 후 발송 버튼을 눌러주세요.")
         else:
           st.error("PDF 렌더링에 실패했습니다. 환경을 확인해 주세요.")
       except Exception as e:
         st.error(f"생성 및 업로드 실패: {e}")
+      finally:
+        import os
+        if 'pdf_filename' in locals() and os.path.exists(pdf_filename):
+            try:
+                os.remove(pdf_filename)
+            except:
+                pass
+        temp_html_path = 'temp_report.html'
+        if os.path.exists(temp_html_path):
+            try:
+                os.remove(temp_html_path)
+            except:
+                pass
+
+  if st.session_state.get("pending_alimtalk"):
+    pending = st.session_state.pending_alimtalk
+    st.markdown("---")
+    st.subheader("✉️ 알림톡 발송 (당분간 수동 진행)")
+    st.info("⚠️ 현재 알림톡 발송 기능은 일시 중단되었습니다. 생성된 PDF를 직접 확인 후 고객에게 수동으로 발송해 주세요.")
+    
+    if st.button("✅ 발송 완료 (수동 발송 확인)", type="primary", use_container_width=True):
+        st.success(f"📱 {pending['customer_name']}님께 수동 발송 처리가 완료되었습니다.")
+        del st.session_state.pending_alimtalk
+        st.rerun()
 
 def render_result_screen():
     analyzer = st.session_state.analyzer
@@ -1257,23 +1479,27 @@ def render_result_screen():
         st.markdown(f"**월령(月令)**  \n{d['deukryeong_info']['status']}")
 
     st.write("---")
-    st.subheader("오행 분석")
+    st.markdown("<h4 style='color:#333; margin-bottom:5px; font-size:18px;'>📊 오행 및 십성 비율</h4>", unsafe_allow_html=True)
+    
     adj = d['adj_scores']
     total_ohaeng = sum(adj.values()) or 1
-    ocols = st.columns(5)
-    for oc, elem in zip(ocols, ['木', '火', '土', '金', '水']):
+    ohaeng_html = "<div style='display:flex; justify-content:space-around; font-size:14px; background:#f9f9f9; padding:10px; border-radius:8px; margin-bottom:10px; border:1px solid #eee;'>"
+    for elem in ['木', '火', '土', '金', '水']:
         pct = adj[elem] / total_ohaeng * 100
-        with oc:
-            st.metric(elem, f"{pct:.1f}%", _ohaeng_band_label(pct))
-            st.progress(min(1.0, pct / 100))
-
-    st.subheader("십성 분석")
+        lbl = _ohaeng_band_label(pct)
+        bg, fg = ELEMENT_COLORS[elem]
+        ohaeng_html += f"<div style='text-align:center;'><div style='font-weight:bold; color:{fg}; font-size:16px;'>{elem}</div><div style='color:#444;'>{pct:.0f}%</div><div style='font-size:11px;color:#888;'>{lbl}</div></div>"
+    ohaeng_html += "</div>"
+    
     order, sipsin_counts, sipsin_total = _sipsin_distribution(analyzer)
-    scols = st.columns(5)
-    for i, name10 in enumerate(order):
-        with scols[i % 5]:
-            pct = sipsin_counts[name10] / sipsin_total * 100
-            st.metric(name10, f"{pct:.0f}%")
+    sipsin_html = "<div style='display:flex; flex-wrap:wrap; justify-content:center; gap:8px; font-size:12px; background:#f9f9f9; padding:10px; border-radius:8px; border:1px solid #eee;'>"
+    for name10 in order:
+        pct = sipsin_counts[name10] / sipsin_total * 100
+        color = "#222" if pct > 0 else "#ccc"
+        sipsin_html += f"<div style='width:18%; text-align:center; color:{color};'><span style='font-weight:bold;'>{name10}</span> {pct:.0f}%</div>"
+    sipsin_html += "</div>"
+    
+    st.markdown(ohaeng_html + sipsin_html, unsafe_allow_html=True)
 
     st.write("---")
     st.subheader("신강신약")
@@ -1283,17 +1509,14 @@ def render_result_screen():
     st.markdown(f"### {strength['strength']}")
     st.caption(f"월령 가중 반영 비율 {strength['helper_ratio']:.1f}% (아군 기운: {'·'.join(strength['helper_elements'])})")
     st.caption(f"월령 왕상휴수사: {season_line}")
-    st.caption(f"{d['deukryeong_info']['status']} - {d['deukryeong_info']['desc']}")
 
     st.subheader("용신(用神)")
     st.markdown(f"- **억부용신**: {d['eokbu_elem']}")
     if d['johu_info']['needed']:
         urgent_tag = " (시급)" if d['johu_info'].get('urgent') else ""
         st.markdown(f"- **조후용신**: {d['johu_info']['element']}{urgent_tag}")
-        st.caption(d['johu_info']['desc'])
     if d['tonggwan_info']['needed']:
         st.markdown(f"- **통관용신**: {d['tonggwan_info']['element']}")
-        st.caption(d['tonggwan_info']['desc'])
 
     st.write("---")
     st.subheader(f"대운 (대운수: {analyzer.daewoon_num})")
@@ -1353,7 +1576,7 @@ def main():
     st.set_page_config(
         page_title="답답명쾌 사주해답소",
         page_icon="🔮",
-        layout="wide",
+        layout="centered",
         initial_sidebar_state="collapsed",
     )
     st.markdown("""
