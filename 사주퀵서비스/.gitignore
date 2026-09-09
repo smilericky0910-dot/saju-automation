@@ -1,0 +1,12 @@
+.streamlit/secrets.toml
+.claude/
+.agents/
+__pycache__/
+*.pyc
+.env
+*.key
+client_secrets.json
+token.json
+outputs/
+saju_env/
+last_analysis_backup.json
