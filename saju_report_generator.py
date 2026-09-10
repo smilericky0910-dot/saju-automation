@@ -129,6 +129,8 @@ def generate_saju_report(
         raise ValueError("Anthropic API 키를 찾을 수 없습니다. secrets.toml 또는 환경변수를 확인해주세요.")
 
     import anthropic
+    # Anthropic SDK 1.4.0+에서 proxies 파라미터는 지원되지 않음
+    # 기본 설정으로만 클라이언트 초기화
     client = anthropic.Anthropic(api_key=key)
     guideline_text = load_guideline_content(guideline_folder)
     
@@ -156,9 +158,18 @@ def generate_saju_report(
         "# 제2장. 목차\n(목차는 시스템에서 자동 생성됩니다)"
     ]
     
-    total_calls = len(CHAPTERS_CONFIG)
+    active_chapters = list(CHAPTERS_CONFIG)
+    if saju_data.get('compatibility', {}).get('requested', False):
+        insert_idx = len(active_chapters)
+        for i, (c_num, c_title, _) in enumerate(active_chapters):
+            if c_num == 18:
+                insert_idx = i
+                break
+        active_chapters.insert(insert_idx, (20, "두 사람의 인연과 정밀 궁합 분석", "상대방의 데이터(partner_saju)를 바탕으로 지침서의 [조건부 확장] 모듈에 따라 두 사람의 시너지와 갈등 요인을 심층 분석하세요. 우열을 판정하지 말고 상호작용의 지도를 그려주세요. (반드시 독립된 챕터로 작성)"))
 
-    for idx, (ch_num, ch_title, ch_inst) in enumerate(CHAPTERS_CONFIG):
+    total_calls = len(active_chapters)
+
+    for idx, (ch_num, ch_title, ch_inst) in enumerate(active_chapters):
         pct = (idx + 1) / total_calls
         msg = f"제{ch_num}장 {ch_title[:15]}... ({idx + 1}/{total_calls})"
         if progress_callback:
@@ -224,6 +235,6 @@ def generate_saju_report(
         full_report_parts.append(final_content)
 
     if progress_callback:
-        progress_callback(1.0, "19개 챕터 전체 작성 및 검증 완료! PDF 조립 중...")
+        progress_callback(1.0, f"{total_calls}개 챕터 전체 작성 및 검증 완료! PDF 조립 중...")
 
     return "\n\n".join(full_report_parts)

@@ -378,8 +378,8 @@ def generate_profile_card_html(saju_data: Dict[str, Any]) -> str:
     animal_full = f"{ANIMAL_COLOR_NAMES.get(elem, '푸른')} {animal}"
     return f"""<div class="profile-card"><div class="profile-avatar">{ANIMAL_EMOJIS.get(animal, '🐮')}</div><div class="profile-info"><div class="profile-name">{name} 님 ({sex})</div><div style="font-size:10.5pt;color:#5C5247;line-height:1.6;"><strong>생년월일:</strong> {meta.get('birth_date', '미상')}<br/><strong>오행:</strong> {pol}{elem_name} · <strong>일주 동물:</strong> {animal_full}</div><div style="font-size:8.5pt;color:#8C8275;margin-top:6px;">※ 일주 동물은 태어난 연도의 띠가 아닌, 본인의 일주(日柱) 기운을 상징하는 메타포입니다.</div></div></div>"""
 
-def generate_toc_html(customer_name: str) -> str:
-    STANDARD_TOC = (
+def generate_toc_html(customer_name: str, has_compat: bool = False) -> str:
+    STANDARD_TOC = [
         ("01", "표지", "분석 대상자 프로필 및 기준 명식"),
         ("02", "목차", "리포트 전체 구조 및 챕터 안내"),
         ("03", "사주에 대하여", "사주를 대하는 올바른 관점과 입문 프롤로그"),
@@ -399,7 +399,11 @@ def generate_toc_html(customer_name: str) -> str:
         ("17", "일상 균형 가이드", "색상·공간·루틴으로 채우는 맞춤 개운법"),
         ("18", "최종 총평", "인생 한 줄 관통 메시지 & DO / DON'T"),
         ("19", "마무리 응원 메시지", "삶의 계절을 맞이하는 따뜻한 격려"),
-    )
+    ]
+    if has_compat:
+        # Insert before 18 (which is index 17)
+        STANDARD_TOC.insert(17, ("20", "두 사람의 정밀 궁합", "시너지와 갈등 요인, 상호작용의 지도"))
+    
     html = ['<div class="toc-page">']
     html.append("""<div class="chapter-header"><span style="font-size:10.5pt;color:#A3344B;font-weight:700;">제2장</span><div style="font-size:22pt;font-weight:800;color:#1D2D44;margin-top:4px;">목차 (Contents)</div></div>""")
     html.append(f'<p style="font-size:11pt;color:#5C5247;margin-bottom:12px;">이 리포트는 다음 순서로, <strong>{customer_name}</strong> 님의 인생을 처음부터 끝까지 하나의 이야기처럼 풀어드립니다.</p>')
@@ -490,7 +494,8 @@ def build_report_html(saju_data: Dict[str, Any], report_markdown: str) -> str:
 
         if ch_num == 2 or "목차" in ch_title:
             if not rendered_toc:
-                html.append(generate_toc_html(name))
+                has_compat = any(c['num'] == 20 for c in chapters)
+                html.append(generate_toc_html(name, has_compat))
                 rendered_toc = True
             continue
 
