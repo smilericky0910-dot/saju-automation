@@ -83,17 +83,17 @@ h1, h2, h3 { font-family: 'Noto Serif KR', 'Nanum Myeongjo', serif; color: #1D2D
 .ohaeng-bar-fill { height: 100%; border-radius: 6px; }
 .ohaeng-bar-value { width: 48px; text-align: right; font-weight: 700; color: #4A4238; }
 
-.grid-3-cards { display: flex; flex-direction: column; gap: 12px; margin: 18px 0; page-break-inside: avoid; }
-.white-card { background: rgba(255,255,255,0.95); border: 1px solid #E5DFD1; border-radius: 10px; padding: 14px 16px; font-size: 12pt; line-height: 1.8; }
+.grid-3-cards { display: flex; flex-direction: column; gap: 12px; margin: 18px 0; }
+.white-card { background: rgba(255,255,255,0.95); border: 1px solid #E5DFD1; border-radius: 10px; padding: 14px 16px; font-size: 12pt; line-height: 1.8; page-break-inside: avoid; }
 .white-card-title { font-weight: 700; color: #A3344B; font-size: 13pt; margin-bottom: 8px; border-bottom: 1px dashed #DCD5C5; padding-bottom: 4px; }
 
-.dodont-container { display: flex; flex-direction: column; gap: 14px; margin: 20px 0; page-break-inside: avoid; }
-.dodont-card { background: #FFF; border-radius: 10px; border: 1px solid #E2DCD0; overflow: hidden; }
+.dodont-container { display: flex; flex-direction: column; gap: 14px; margin: 20px 0; }
+.dodont-card { background: #FFF; border-radius: 10px; border: 1px solid #E2DCD0; overflow: hidden; page-break-inside: avoid; }
 .dodont-header-dont { background: #5C5247; color: #FFF; padding: 10px 16px; font-weight: 700; font-size: 12pt; }
 .dodont-header-do { background: #A3344B; color: #FFF; padding: 10px 16px; font-weight: 700; font-size: 12pt; }
 .dodont-body { padding: 14px 16px; font-size: 12pt; line-height: 1.8; color: #333; }
 
-.feature-impact-block { background: #FFF; border-left: 4px solid #A3344B; border-radius: 0 8px 8px 0; padding: 14px 18px; margin: 16px 0; page-break-inside: avoid; font-size: 12.5pt; }
+.feature-impact-block { background: #FFF; border-left: 4px solid #A3344B; border-radius: 0 8px 8px 0; padding: 14px 18px; margin: 16px 0; font-size: 12.5pt; }
 p { margin: 0 0 14px 0; text-align: justify; }
 blockquote { border-left: 3px solid #C89B54; margin: 14px 0; padding: 10px 16px; background: rgba(200,155,84,0.08); font-size: 12pt; }
 """
@@ -376,14 +376,15 @@ def generate_profile_card_html(saju_data: Dict[str, Any]) -> str:
     elem_name = {'木':'목','火':'화','土':'토','金':'금','水':'수'}.get(elem, '목')
     animal = branch_info.get('animal', '소')
     animal_full = f"{ANIMAL_COLOR_NAMES.get(elem, '푸른')} {animal}"
-    return f"""<div class="profile-card"><div class="profile-avatar">{ANIMAL_EMOJIS.get(animal, '🐮')}</div><div class="profile-info"><div class="profile-name">{name} 님 ({sex})</div><div style="font-size:10.5pt;color:#5C5247;line-height:1.6;"><strong>생년월일:</strong> {meta.get('birth_date', '미상')}<br/><strong>오행:</strong> {pol}{elem_name} · <strong>일주 동물:</strong> {animal_full}</div><div style="font-size:8.5pt;color:#8C8275;margin-top:6px;">※ 일주 동물은 태어난 연도의 띠가 아닌, 본인의 일주(日柱) 기운을 상징하는 메타포입니다.</div></div></div>"""
+    birth_str = meta.get('original_birth_str') or meta.get('birth_date', '미상')
+    return f"""<div class="profile-card"><div class="profile-avatar">{ANIMAL_EMOJIS.get(animal, '🐮')}</div><div class="profile-info"><div class="profile-name">{name} 님 ({sex})</div><div style="font-size:10.5pt;color:#5C5247;line-height:1.6;"><strong>생년월일:</strong> {birth_str}<br/><strong>오행:</strong> {pol}{elem_name} · <strong>일주 동물:</strong> {animal_full}</div><div style="font-size:8.5pt;color:#8C8275;margin-top:6px;">※ 일주 동물은 태어난 연도의 띠가 아닌, 본인의 일주(日柱) 기운을 상징하는 메타포입니다.</div></div></div>"""
 
 def generate_toc_html(customer_name: str, has_compat: bool = False) -> str:
     STANDARD_TOC = [
         ("01", "표지", "분석 대상자 프로필 및 기준 명식"),
         ("02", "목차", "리포트 전체 구조 및 챕터 안내"),
         ("03", "사주에 대하여", "사주를 대하는 올바른 관점과 입문 프롤로그"),
-        ("04", "사주 스냅샷", "사주 원국표 및 일주 동물 메타포"),
+        ("04", "사주 원국표", "사주 원국표 및 일주 동물 메타포"),
         ("05", "오행 에너지 균형", "합화 반영 점수와 신강·신약, 억부/조후용신"),
         ("06", "본질적 자아", "일간과 일지로 보는 내면 기질과 실생활 3장면"),
         ("07", "생애 4주기 흐름", "초년·청년·중년·말년의 인생 사계절"),
@@ -397,8 +398,7 @@ def generate_toc_html(customer_name: str, has_compat: bool = False) -> str:
         ("15", "미시적 세운 흐름", "향후 5개년(2026~2030) 연도별 집중 실천 전략"),
         ("16", "스페셜 심층 질문 답변", "명리학적 맞춤형 고민 해결 및 전환기 전략"),
         ("17", "일상 균형 가이드", "색상·공간·루틴으로 채우는 맞춤 개운법"),
-        ("18", "최종 총평", "인생 한 줄 관통 메시지 & DO / DON'T"),
-        ("19", "마무리 응원 메시지", "삶의 계절을 맞이하는 따뜻한 격려"),
+        ("18", "마무리 응원 메시지", "삶의 계절을 맞이하는 따뜻한 격려"),
     ]
     if has_compat:
         # Insert before 18 (which is index 17)
@@ -428,17 +428,35 @@ def parse_markdown_with_cards(text: str) -> str:
             if in_p: out.append('</p>'); in_p = False
             out.append(line); continue
         line = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', line)
+        line = re.sub(r'(?<!\*)\*([^\*]+)\*(?!\*)', r'<em>\1</em>', line) # Italic
+        
+        # 젬나이가 자주 쓰는 마크다운 기호들(---, # 등) 제거 또는 변환
+        if s == '---':
+            if in_p: out.append('</p>'); in_p = False
+            out.append('<hr style="border:0;border-top:1px solid #E5E0D8;margin:20px 0;"/>')
+            continue
+            
         if s.startswith('### '):
             if in_p: out.append('</p>'); in_p = False
-            out.append(f'<h3 style="font-size:13.5pt;color:#1D2D44;margin:18px 0 8px 0;border-left:3px solid #A3344B;padding-left:8px;">{s[4:]}</h3>')
+            # 별표 잔여물 1차 방어
+            h_text = s[4:].replace('**', '').replace('*', '')
+            out.append(f'<h3 style="font-size:13.5pt;color:#1D2D44;margin:18px 0 8px 0;border-left:3px solid #A3344B;padding-left:8px;">{h_text}</h3>')
         elif s.startswith('## '):
             if in_p: out.append('</p>'); in_p = False
-            out.append(f'<h2 style="font-size:15pt;color:#1D2D44;margin:22px 0 10px 0;">{s[3:]}</h2>')
+            h_text = s[3:].replace('**', '').replace('*', '')
+            out.append(f'<h2 style="font-size:15pt;color:#1D2D44;margin:22px 0 10px 0;">{h_text}</h2>')
+        elif s.startswith('# '):
+            if in_p: out.append('</p>'); in_p = False
+            h_text = s[2:].replace('**', '').replace('*', '')
+            out.append(f'<h1 style="font-size:18pt;color:#1D2D44;margin:24px 0 12px 0;">{h_text}</h1>')
         elif s.startswith('> '):
             if in_p: out.append('</p>'); in_p = False
-            out.append(f'<blockquote>{s[2:]}</blockquote>')
+            out.append(f'<blockquote style="background:#F5F3EF;padding:12px;border-left:4px solid #A3344B;margin:10px 0;font-style:italic;">{s[2:]}</blockquote>')
         else:
             if not in_p: out.append('<p>'); in_p = True
+            # 리스트 기호 변환
+            if line.strip().startswith('* ') or line.strip().startswith('- '):
+                line = line.replace('* ', '• ', 1).replace('- ', '• ', 1)
             out.append(line)
     if in_p: out.append('</p>')
     return "\n".join(out)
@@ -502,7 +520,7 @@ def build_report_html(saju_data: Dict[str, Any], report_markdown: str) -> str:
         html.append(f"""<div class="chapter-divider"><div class="chapter-num">CHAPTER {ch_num:02d}</div><div class="chapter-title">{ch_title}</div><div class="chapter-line"></div></div><div class="chapter-content"><div class="chapter-header"><span style="font-size:10.5pt;color:#A3344B;font-weight:700;">제{ch_num}장</span><div style="font-size:20pt;font-weight:800;color:#1D2D44;margin-top:4px;">{ch_title}</div></div>""")
         title_clean = ch_title.replace(" ", "")
 
-        if any(k in title_clean for k in ("스냅샷", "프로필", "원국표")):
+        if any(k in title_clean for k in ("스냅샷", "원국표", "프로필")):
             html.append(generate_profile_card_html(saju_data))
             html.append(generate_snapshot_html(saju_data, chapter_type='all'))
         elif any(k in title_clean for k in ("기본명식", "오행에너지", "오행분석", "에너지균형")):

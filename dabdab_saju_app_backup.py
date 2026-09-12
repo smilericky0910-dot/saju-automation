@@ -67,7 +67,6 @@ MYUNGRI_TIME_MAPPING = {
 }
 
 CITY_LONGITUDE_OFFSETS = {
-    "보정 없음 (표준시 그대로 0분)": 0,
     "서울특별시": -32, "부산광역시": -24, "대구광역시": -26, "인천광역시": -33,
     "광주광역시": -33, "대전광역시": -30, "울산광역시": -23, "세종특별자치시": -31,
     "수원시": -32, "성남시": -31, "의정부시": -32, "안양시": -32, "부천시": -33,
@@ -105,6 +104,7 @@ CITY_LONGITUDE_OFFSETS = {
     "산청군": -28, "함양군": -29, "거창군": -28, "합천군": -27,
     "강원도": -29, "경기도": -32, "충청북도": -29, "충청남도": -32,
     "전라북도": -31, "전라남도": -32, "경상북도": -26, "경상남도": -27, "제주도": -34,
+    "보정 없음 (표준시 그대로 0분)": 0,
 }
 
 STEM_INFO = {
@@ -900,7 +900,18 @@ def _pillar_card_html(label, stem, stem_deity, branch, branch_deity, jijanggan, 
     """
 
 def render_input_screen():
-    st.markdown("<h2 style='text-align:center; margin-bottom:2rem;'>고객 기본정보 입력</h2>", unsafe_allow_html=True)
+    st.markdown("""
+        <style>
+        .header-box h1, .header-box h4, .header-box p {
+            color: #ffffff !important;
+        }
+        </style>
+        <div class="header-box" style='background-color:#2b2926; padding:2rem; border-radius:10px; margin-bottom:2rem; text-align:center;'>
+            <h4 style='margin-top:0; font-size:18px;'>답답명쾌 사주 해답소</h4>
+            <h1 style='margin-top:5px; margin-bottom:15px; font-size:32px;'>심층 사주풀이 신청서</h1>
+            <p style='margin-bottom:0; font-size:16px; line-height:1.6;'>고객님의 생년월일시와 상담 고민을 남겨주시면, 정밀 사주원국을 분석하여 심층 풀이 및 맞춤형 PDF 보고서를 카카오톡으로 발송해 드립니다.</p>
+        </div>
+    """, unsafe_allow_html=True)
     
     # [추가] 백업 복구 버튼
     import os, json
@@ -931,7 +942,7 @@ def render_input_screen():
                 st.error(f"복구 실패: {e}")
         st.write("---")
 
-    # 기본 정보 입력란 시작
+    st.markdown("<h3 style='font-size:22px; margin-bottom:10px; color:#222;'>👤 신청자 기본 정보</h3>", unsafe_allow_html=True)
     col1, col2 = st.columns(2)
     with col1:
         st.markdown("<div style='font-size:16px; font-weight:bold; margin-bottom:8px; color:#222;'>성명 (이름) <span style='color:red;font-size:14px;'>* (필수)</span></div>", unsafe_allow_html=True)
@@ -963,11 +974,14 @@ def render_input_screen():
     col_t1, col_t2 = st.columns([1, 1])
     with col_t1:
         st.markdown("<div style='font-size:16px; font-weight:bold; margin-top:15px; margin-bottom:8px; color:#222;'>🕒 태어난 시간 <span style='color:red;font-size:14px;'>* (필수)</span></div>", unsafe_allow_html=True)
-        time_unknown = st.checkbox("시간 모름 (선택 시 시간 제외)", key="main_time_unknown_cb")
-        if time_unknown:
+        time_selection = st.selectbox("태어난 시간 유형", MYUNGRI_TIME_OPTIONS, index=0, label_visibility="collapsed")
+        
+        if time_selection == "시간 모름 (선택 시 시간 제외)":
             birth_time = datetime.time(12, 0)
+            time_unknown = True
         else:
-            birth_time = st.time_input("태어난 시간 (시:분)", value=datetime.time(12, 0), label_visibility="collapsed")
+            birth_time = MYUNGRI_TIME_MAPPING[time_selection]
+            time_unknown = False
             
     with col_t2:
         st.markdown("<div style='margin-top:45px;'></div>", unsafe_allow_html=True)
@@ -1063,12 +1077,12 @@ def render_input_screen():
                 partner_date = datetime.date(1990, 1, 1)
 
             st.markdown(f"<div style='font-size:16px; font-weight:bold; margin-top:10px; margin-bottom:8px; color:#222;'>🕒 {partner_label} 태어난 시간</div>", unsafe_allow_html=True)
-            p_time_unknown = st.checkbox("시간 모름 (선택 시 시간 제외)", key="p_time_unknown_cb")
-            if p_time_unknown:
-                partner_time = datetime.time(12, 0)
+            p_time_selection = st.selectbox(f"{partner_label} 태어난 시간 유형", MYUNGRI_TIME_OPTIONS, index=0, key="p_time_select", label_visibility="collapsed")
+            if p_time_selection == "시간 모름 (선택 시 시간 제외)":
+                partner_time = None
                 partner_time_unknown = True
             else:
-                partner_time = st.time_input(f"{partner_label} 태어난 시간 (시:분)", value=datetime.time(12, 0), key="p_time_input", label_visibility="collapsed")
+                partner_time = MYUNGRI_TIME_MAPPING[p_time_selection]
                 partner_time_unknown = False
 
             partner_city_options = ["선택 안 함"] + list(CITY_LONGITUDE_OFFSETS.keys())
@@ -1319,11 +1333,10 @@ def render_gdrive_upload_section(saju_data, customer_name, birth_date):
         from saju_report_generator import generate_saju_report
 
         with st.spinner(
-            "젬나이 3.6 Flash AI가 사주 해설을 작성 중입니다... (약 1분"
+            "클로드 소넷 AI가 사주 해설을 작성 중입니다... (약 1분"
             " 소요)"
         ):
-          from saju_report_generator_gemini import generate_saju_report_gemini
-          report_md = generate_saju_report_gemini(
+          report_md = generate_saju_report(
               current_saju_data, progress_callback=on_progress
           )
           st.session_state.generated_report = report_md
@@ -1391,6 +1404,7 @@ def render_gdrive_upload_section(saju_data, customer_name, birth_date):
       except Exception as e:
         st.error(f"생성 및 업로드 실패: {e}")
       finally:
+        import os
         if 'pdf_filename' in locals() and os.path.exists(pdf_filename):
             try:
                 os.remove(pdf_filename)
@@ -1406,25 +1420,13 @@ def render_gdrive_upload_section(saju_data, customer_name, birth_date):
   if st.session_state.get("pending_alimtalk"):
     pending = st.session_state.pending_alimtalk
     st.markdown("---")
-    st.subheader("✉️ 카카오 알림톡 자동 발송")
-    st.info("💡 PDF 검수가 완료되었다면 아래 버튼을 눌러 고객에게 즉시 알림톡을 전송하세요.")
+    st.subheader("✉️ 알림톡 발송 (당분간 수동 진행)")
+    st.info("⚠️ 현재 알림톡 발송 기능은 일시 중단되었습니다. 생성된 PDF를 직접 확인 후 고객에게 수동으로 발송해 주세요.")
     
-    if st.button("🚀 알림톡 발송하기", type="primary", use_container_width=True):
-        from saju_alimtalk import send_saju_alimtalk_immediately
-        
-        with st.spinner("알림톡 발송 중..."):
-            success = send_saju_alimtalk_immediately(
-                customer_name=pending['customer_name'],
-                phone_number=pending['phone_number'],
-                file_id=pending['file_id']
-            )
-            
-        if success:
-            st.success(f"📱 {pending['customer_name']}님께 카카오 알림톡이 성공적으로 발송되었습니다!")
-            del st.session_state.pending_alimtalk
-            st.rerun()
-        else:
-            st.error("알림톡 발송에 실패했습니다. 로그를 확인하거나 수동으로 전송해주세요.")
+    if st.button("✅ 발송 완료 (수동 발송 확인)", type="primary", use_container_width=True):
+        st.success(f"📱 {pending['customer_name']}님께 수동 발송 처리가 완료되었습니다.")
+        del st.session_state.pending_alimtalk
+        st.rerun()
 
 def _saju_table_html(pillars, d, analyzer):
     order = ['시주', '일주', '월주', '년주']
@@ -1455,7 +1457,7 @@ def _saju_table_html(pillars, d, analyzer):
         if not p or p[1] == '-': html += td("-")
         else:
             elem = STEM_INFO[p[1]]['element']
-            yin_yang = STEM_INFO[p[1]]['polarity']
+            yin_yang = STEM_INFO[p[1]]['yin_yang']
             html += td(f"{p[1]}({yin_yang}{elem})")
     html += "</tr>"
     
@@ -1485,7 +1487,7 @@ def _saju_table_html(pillars, d, analyzer):
         if not p or p[2] == '-': html += td("-")
         else:
             elem = BRANCH_INFO[p[2]]['element']
-            yin_yang = BRANCH_INFO[p[2]]['polarity']
+            yin_yang = BRANCH_INFO[p[2]]['yin_yang']
             html += td(f"{p[2]}({yin_yang}{elem})")
     html += "</tr>"
     
@@ -1526,14 +1528,13 @@ def _saju_table_html(pillars, d, analyzer):
         if not p or p[2] == '-': 
             html += td("-")
         else:
-            pos_label = p[4]
-            branch_char = p[2]
+            pos = p[4]
             badges = []
-            if sinsal_data['cheoneul']['exists'] and branch_char in sinsal_data['cheoneul'].get('branches', []): badges.append('천을귀인')
-            if sinsal_data['munchang']['exists'] and branch_char == sinsal_data['munchang'].get('branch'): badges.append('문창귀인')
-            if sinsal_data['goegang']['exists'] and pos_label == '일지': badges.append('괴강살')
-            if sinsal_data['yangin']['exists'] and branch_char == sinsal_data['yangin'].get('branch'): badges.append('양인살')
-            if sinsal_data['dohwa']['exists'] and branch_char == sinsal_data['dohwa'].get('branch'): badges.append('도화살')
+            if sinsal_data['cheoneul']['exists'] and pos in sinsal_data['cheoneul']['positions']: badges.append('천을귀인')
+            if sinsal_data['munchang']['exists'] and pos in sinsal_data['munchang']['positions']: badges.append('문창귀인')
+            if sinsal_data['goegang']['exists'] and pos in sinsal_data['goegang']['positions']: badges.append('괴강살')
+            if sinsal_data['yangin']['exists'] and pos in sinsal_data['yangin']['positions']: badges.append('양인살')
+            if sinsal_data['dohwa']['exists'] and pos in sinsal_data['dohwa']['positions']: badges.append('도화살')
             html += td("·".join(badges) if badges else "-")
     html += "</tr>"
     

@@ -12,7 +12,7 @@ DEFAULT_GUIDELINE_FILENAME = "프리미엄_종합_사주_분석_지침_v5.0.md"
 
 CHAPTERS_CONFIG = (
     (3, "사주에 대하여 (입문 프롤로그)", "네 기둥과 여덟 글자의 원리, 삶의 나침반으로서 사주를 대하는 따뜻하고 품격 있는 에세이를 작성하세요. (표는 절대 그리지 마세요)"),
-    (4, "사주 스냅샷 해설", "일주 동물 메타포에 대한 상세한 상징 의미와 명리학적 배경 해설을 친절하게 작성하세요. (원국표는 시스템이 직접 그리므로 표는 일절 그리지 마세요)"),
+    (4, "사주 원국표 해설", "일주 동물 메타포에 대한 상세한 상징 의미와 명리학적 배경 해설을 친절하게 작성하세요. (원국표는 시스템이 직접 그리므로 표는 일절 그리지 마세요)"),
     (5, "사주 기본 명식 및 오행 에너지 균형", "합화 반영 점수 변화, 신강/신약 판별, 억부용신과 조후용신의 역할을 명확한 인과관계로 상세히 풀이하세요. (표와 그래프는 시스템이 그리므로 글만 작성하세요)"),
     (6, "본질적 자아 (일간-일지, 일주론)", "반드시 [기질적 특징]과 [실생활 영향 장면]을 서술하고, 다음 3개 소제목을 반드시 포함하여 작성하세요:\n직장에서의 모습:\n갈등 상황 대처:\n일상의 무의식적 욕망:\n마지막에 [실천 행동 가이드]를 작성하세요."),
     (7, "생애 4주기 시간 흐름", "연주(초년), 월주(청년), 일주(중년), 시주(말년)로 이어지는 인생의 4대 계절 서사를 각 주기별로 풍성하게 작성하세요."),
@@ -59,8 +59,7 @@ CHAPTERS_CONFIG = (
     
     (16, "스페셜 심층 질문 답변", "고객의 고민/질문에 대한 명리학적 솔루션을 제시하세요. (특별한 질문이 없으면 사주 맞춤형 인생 전환기 극대화 전략을 서술하세요)"),
     (17, "일상 균형 가이드", "부족한 기운을 채우는 맞춤 색상, 방위, 공간 인테리어, 모닝/나이트 생활 습관을 친절하게 안내하세요."),
-    (18, "최종 총평", "인생 관통 한 줄 메시지와 함께, 반드시 아래 2단 대조 서식을 작성하세요:\nDON'T (절대 피할 3가지)\nDO (당장 실천할 3가지)"),
-    (19, "마무리 응원 메시지", "삶의 계절을 맞이하는 태도와 존엄성을 북돋워 주는 깊고 따뜻한 격려 문장(3~5문장)으로 마무리하세요.")
+    (18, "마무리 응원 메시지", "삶의 계절을 맞이하는 태도와 존엄성을 북돋워 주는 깊고 따뜻한 격려 문장(3~5문장)으로 마무리하세요.")
 )
 
 def load_guideline_content(folder_path: str = ".") -> str:
@@ -107,10 +106,6 @@ def verify_chapter_output(ch_num: int, ch_title: str, content: str, stop_reason:
             if "2028" not in clean_text or "2029" not in clean_text or "2030" not in clean_text:
                 return False, "2028~2030년 세운 분석 중 일부 연도가 누락되었습니다."
 
-    elif ch_num == 18:
-        if "DON" not in clean_text.upper() or "DO" not in clean_text.upper():
-            return False, "제18장의 필수 서식인 DO / DON'T 항목이 누락되었습니다."
-
     elif ch_num == 6:
         if "직장" not in clean_text or "갈등" not in clean_text:
             return False, "제6장의 3대 필수 실생활 장면이 누락되었습니다."
@@ -121,7 +116,7 @@ def generate_saju_report(
     saju_data: Dict[str, Any],
     api_key: Optional[str] = None,
     guideline_folder: str = ".",
-    model_name: str = "claude-sonnet-5",
+    model_name: str = "claude-haiku-4-5-20251001",
     progress_callback: Optional[Callable[[float, str], None]] = None
 ) -> str:
     key = api_key or get_anthropic_api_key()
